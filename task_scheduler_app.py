@@ -115,6 +115,9 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
         scheduled_df = pd.DataFrame(scheduled_tasks)
 
+        # Ensure Date columns are datetime for filtering
+        scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
+
         # Filter scheduled_df to only include dates in free_time_df
         scheduled_df = scheduled_df[scheduled_df['Date'].isin(free_time_df['Date'])]
 
