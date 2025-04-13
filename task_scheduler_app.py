@@ -115,6 +115,9 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
         scheduled_df = pd.DataFrame(scheduled_tasks)
 
+        # Filter scheduled_df to only include dates in free_time_df
+        scheduled_df = scheduled_df[scheduled_df['Date'].isin(free_time_df['Date'])]
+
         daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
         
         # Ensure both Date columns are datetime
