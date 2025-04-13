@@ -54,32 +54,102 @@ else:
     edited_tasks_df.to_csv(tasks_file, index=False)
     tasks_df = edited_tasks_df  # Update the main dataframe with edits
 
-st.subheader("Edit Free Time Windows")
+st.subheader("Manage Free Time Windows")
 
-# Add Sort Order column if it doesn't exist
-if 'Sort Order' not in free_time_df.columns:
-    if free_time_df.empty:
-        free_time_df['Sort Order'] = []
+# Initialize free_time_df with correct types
+if 'Date' in free_time_df.columns:
+    free_time_df['Date'] = pd.to_datetime(free_time_df['Date'])
+    
+# Create sessions states for the free time management
+if 'free_time_date' not in st.session_state:
+    st.session_state.free_time_date = datetime.today()
+if 'free_time_hours' not in st.session_state:
+    st.session_state.free_time_hours = 1.0
+
+# Remove Sort Order column if it exists
+if 'Sort Order' in free_time_df.columns:
+    free_time_df = free_time_df.drop('Sort Order', axis=1)
+
+# Add new free time window with a form
+with st.form("add_free_time"):
+    cols = st.columns([2, 1, 1])
+    with cols[0]:
+        selected_date = st.date_input("Select Date", value=st.session_state.free_time_date, key="new_date")
+    with cols[1]:
+        hours = st.number_input("Hours Available", min_value=0.5, max_value=24.0, value=st.session_state.free_time_hours, step=0.5, key="new_hours")
+    with cols[2]:
+        add_button = st.form_submit_button("Add Free Time")
+        
+if add_button:
+    # Convert date to pandas datetime
+    pd_date = pd.to_datetime(selected_date)
+    
+    # Check if date already exists
+    if not free_time_df.empty and pd_date in free_time_df['Date'].values:
+        # Add to existing date
+        idx = free_time_df[free_time_df['Date'] == pd_date].index[0]
+        free_time_df.at[idx, 'Available Hours'] += hours
     else:
-        free_time_df['Sort Order'] = range(1, len(free_time_df) + 1)
+        # Add new date
+        new_row = pd.DataFrame({'Date': [pd_date], 'Available Hours': [hours]})
+        free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
+    
+    # Save changes
+    free_time_df.to_csv(free_time_file, index=False)
+    st.session_state.free_time_date = selected_date
+    st.session_state.free_time_hours = hours
 
-# Simple column config without potentially problematic format strings
-edited_free_time_df = st.data_editor(
-    free_time_df,
-    num_rows="dynamic",
-    use_container_width=True,
-    disabled=False,
-    key="free_time_editor",
-    column_order=["Sort Order", "Date", "Available Hours"]
-)
+# Display free time windows with move up/down buttons
+if not free_time_df.empty:
+    # Sort by date for display
+    free_time_df = free_time_df.sort_values('Date')
+    
+    for i, (idx, row) in enumerate(free_time_df.iterrows()):
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+        
+        with col1:
+            formatted_date = row['Date'].strftime('%A, %B %d, %Y') if pd.notnull(row['Date']) else "Invalid Date"
+            st.write(f"{formatted_date}")
+        
+        with col2:
+            st.write(f"{row['Available Hours']} hours")
+            
+        with col3:
+            # Move Up button (disabled for first row)
+            if i > 0 and st.button("⬆️ Move Up", key=f"up_{idx}"):
+                # Swap with previous row by date
+                free_time_df = free_time_df.sort_values('Date')
+                dates = free_time_df['Date'].tolist()
+                current_date = dates[i]
+                prev_date = dates[i-1]
+                
+                # Store current values
+                current_hours = free_time_df.loc[free_time_df['Date'] == current_date, 'Available Hours'].values[0]
+                prev_hours = free_time_df.loc[free_time_df['Date'] == prev_date, 'Available Hours'].values[0]
+                
+                # Swap dates (keep hours the same)
+                free_time_df.loc[free_time_df['Date'] == current_date, 'Date'] = prev_date
+                free_time_df.loc[free_time_df['Date'] == prev_date, 'Date'] = current_date
+                
+                # Save changes
+                free_time_df.to_csv(free_time_file, index=False)
+                st.experimental_rerun()
+                
+        with col4:
+            # Delete button
+            if st.button("🗑️ Delete", key=f"del_{idx}"):
+                free_time_df = free_time_df.drop(idx)
+                free_time_df.to_csv(free_time_file, index=False)
+                st.experimental_rerun()
+    
+    # Show a summary
+    st.info(f"Total free time available: {free_time_df['Available Hours'].sum()} hours")
+else:
+    st.info("No free time windows added yet. Use the form above to add free time.")
 
-# Sort by the Sort Order column
-if not edited_free_time_df.empty and 'Sort Order' in edited_free_time_df.columns:
-    edited_free_time_df = edited_free_time_df.sort_values(by='Sort Order')
+# Update the main dataframe with edits for use in scheduling
+free_time_df.to_csv(free_time_file, index=False)
 
-# Save any changes to the free time
-edited_free_time_df.to_csv(free_time_file, index=False)
-free_time_df = edited_free_time_df  # Update the main dataframe with edits
 
 # Decision Results Storage
 if 'action_results' not in st.session_state:
