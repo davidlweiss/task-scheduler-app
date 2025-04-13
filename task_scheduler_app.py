@@ -655,7 +655,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                 st.session_state.selected_task_index = 0
                                 st.session_state.selected_approach = 0
                                 
-                                st.success(f"Marked as a fixed duration event. It won't be flagged for breakdown again.")
+                                st.success("Marked as a fixed duration event. It won't be flagged for breakdown again.")
                                 st.session_state['rerun_scheduler'] = True
                                 st.rerun() again.")
                                 st.session_state['rerun_scheduler'] = True
