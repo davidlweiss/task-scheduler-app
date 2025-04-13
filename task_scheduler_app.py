@@ -72,27 +72,42 @@ if 'Sort Order' in free_time_df.columns:
 
 # Add new free time window with a form
 with st.form("add_free_time"):
-    cols = st.columns([2, 1, 1])
+    cols = st.columns([2, 1, 1, 1])
     with cols[0]:
         selected_date = st.date_input("Select Date", value=st.session_state.free_time_date, key="new_date")
     with cols[1]:
-        hours = st.number_input("Hours Available", min_value=0.5, max_value=24.0, value=st.session_state.free_time_hours, step=0.5, key="new_hours")
+        hours = st.number_input("Hours", min_value=0.5, max_value=24.0, value=st.session_state.free_time_hours, step=0.5, key="new_hours")
     with cols[2]:
-        add_button = st.form_submit_button("Add Free Time")
+        operation = st.radio("Operation", ["Add", "Subtract"], horizontal=True)
+    with cols[3]:
+        submit_button = st.form_submit_button("Update Free Time")
         
-if add_button:
+if submit_button:
     # Convert date to pandas datetime
     pd_date = pd.to_datetime(selected_date)
     
     # Check if date already exists
     if not free_time_df.empty and pd_date in free_time_df['Date'].values:
-        # Add to existing date
+        # Add or subtract from existing date
         idx = free_time_df[free_time_df['Date'] == pd_date].index[0]
-        free_time_df.at[idx, 'Available Hours'] += hours
+        if operation == "Add":
+            free_time_df.at[idx, 'Available Hours'] += hours
+        else:  # Subtract
+            current_hours = free_time_df.at[idx, 'Available Hours']
+            new_hours = max(0, current_hours - hours)  # Prevent negative hours
+            
+            if new_hours == 0:
+                # Remove the date if hours reduced to 0
+                free_time_df = free_time_df.drop(idx)
+            else:
+                free_time_df.at[idx, 'Available Hours'] = new_hours
     else:
-        # Add new date
-        new_row = pd.DataFrame({'Date': [pd_date], 'Available Hours': [hours]})
-        free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
+        # Only add new date if adding hours (can't subtract from non-existent date)
+        if operation == "Add":
+            new_row = pd.DataFrame({'Date': [pd_date], 'Available Hours': [hours]})
+            free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
+        else:
+            st.warning(f"Cannot subtract hours from {selected_date.strftime('%A, %B %d')} - date doesn't exist yet.")
     
     # Save changes
     free_time_df.to_csv(free_time_file, index=False)
