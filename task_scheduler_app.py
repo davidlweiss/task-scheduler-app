@@ -46,6 +46,9 @@ free_time_df.to_csv(free_time_file, index=False)
 if 'action_results' not in st.session_state:
     st.session_state['action_results'] = []
 
+# Focus View Toggle
+focus_mode = st.checkbox("Enter Weekly Setup Mode (Focus View)")
+
 # Run Scheduler Button
 if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
@@ -100,7 +103,47 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
     scheduled_df = pd.DataFrame(scheduled_tasks)
 
-    if not scheduled_df.empty:
+    if focus_mode:
+        st.subheader("Focus View: This Week")
+
+        today = pd.to_datetime(datetime.today().date())
+        end_of_week = today + pd.Timedelta(days=6 - today.weekday())
+
+        due_soon = tasks_df[(tasks_df['Due Date'] <= end_of_week) & (tasks_df['Due Date'] >= today)]
+        overdue = tasks_df[tasks_df['Due Date'] < today]
+
+        st.write("### Overdue Tasks")
+        st.dataframe(overdue if not overdue.empty else pd.DataFrame({'Message': ['None']}))
+
+        st.write("### Tasks Due This Week")
+        st.dataframe(due_soon if not due_soon.empty else pd.DataFrame({'Message': ['None']}))
+
+        st.write("### Scheduled This Week")
+
+        st.write("### Unscheduled Important Tasks")
+        unscheduled = tasks_df[(tasks_df['Due Date'].isna()) & (tasks_df['Importance'] >= 4)]
+        for idx, task in unscheduled.iterrows():
+            st.write(f"- {task['Task']} ({task['Estimated Time']}h)")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button(f"Create Work Block for {task['Task']}", key=f"workblock_{task['Task']}"):
+                    tasks_df.loc[idx, 'Task'] = f"{task['Task']} (Work Block)"
+                    tasks_df.to_csv(tasks_file, index=False)
+                    st.experimental_rerun()
+            with col2:
+                if st.button(f"Combine Small Tasks", key=f"combine_{task['Task']}"):
+                    pass  # Placeholder for future logic
+            with col3:
+                if st.button(f"Flag for Later", key=f"flag_{task['Task']}"):
+                    if 'Status' not in tasks_df.columns:
+                        tasks_df['Status'] = ''
+                    tasks_df.loc[idx, 'Status'] = 'Revisit Later'
+                    tasks_df.to_csv(tasks_file, index=False)
+                    st.experimental_rerun()
+        week_scheduled = scheduled_df[(scheduled_df['Date'] >= today) & (scheduled_df['Date'] <= end_of_week)]
+        st.dataframe(week_scheduled if not week_scheduled.empty else pd.DataFrame({'Message': ['None']}))
+
+    elif not scheduled_df.empty:
         pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
         non_empty_cols = pivot_df.columns[pivot_df.notna().any()].tolist()
         empty_cols = pivot_df.columns[~pivot_df.notna().any()].tolist()
