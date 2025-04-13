@@ -35,11 +35,11 @@ if uploaded_free_time:
 
 # Editable data tables
 st.subheader("Edit Tasks")
-tasks_df = st.data_editor(tasks_df, num_rows="dynamic")
+st.data_editor(tasks_df, num_rows="dynamic", use_container_width=True)
 tasks_df.to_csv(tasks_file, index=False)
 
 st.subheader("Edit Free Time Windows")
-free_time_df = st.data_editor(free_time_df, num_rows="dynamic")
+st.data_editor(free_time_df, num_rows="dynamic", use_container_width=True)
 free_time_df.to_csv(free_time_file, index=False)
 
 # Decision Results Storage
