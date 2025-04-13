@@ -11,6 +11,9 @@ st.title("Dynamic Task Scheduler V6")
 
 # Load or initialize data
 def load_data(file_path, columns):
+    """
+    Loads a CSV if present, else returns an empty DataFrame with specified columns.
+    """
     if os.path.exists(file_path):
         return pd.read_csv(file_path)
     else:
@@ -39,10 +42,21 @@ st.subheader("Edit Tasks")
 if st.checkbox("Enable Sorting Mode (View Only)"):
     st.dataframe(tasks_df, use_container_width=True)
 else:
-    st.data_editor(tasks_df, num_rows="dynamic", use_container_width=True, column_config={"Task": st.column_config.Column(width='large')}, disabled=False)
+    st.data_editor(
+        tasks_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={"Task": st.column_config.Column(width='large')},
+        disabled=False
+    )
 
 st.subheader("Edit Free Time Windows")
-st.data_editor(free_time_df, num_rows="dynamic", use_container_width=True, disabled=False)
+st.data_editor(
+    free_time_df,
+    num_rows="dynamic",
+    use_container_width=True,
+    disabled=False
+)
 
 # Save edited data
 tasks_df.to_csv(tasks_file, index=False)
@@ -68,12 +82,22 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
     st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
 
     if total_estimated_time > total_free_time:
-        st.warning(f"You are over capacity by {total_estimated_time - total_free_time} hours. Consider reducing tasks, adding free time, or moving due dates.")
+        st.warning(
+            f"You are over capacity by {total_estimated_time - total_free_time} hours. "
+            f"Consider reducing tasks, adding free time, or moving due dates."
+        )
     else:
-        st.success(f"You have {total_free_time - total_estimated_time} hours of free capacity remaining.")
+        st.success(
+            f"You have {total_free_time - total_estimated_time} hours of free capacity remaining."
+        )
 
     st.markdown("### Daily Capacity vs Demand")
-    daily_summary = free_time_df.groupby('Date')['Available Hours'].sum().reset_index().rename(columns={'Available Hours': 'Total Available'})
+    daily_summary = (
+        free_time_df.groupby('Date')['Available Hours']
+        .sum()
+        .reset_index()
+        .rename(columns={'Available Hours': 'Total Available'})
+    )
 
     if not tasks_df.empty:
         scheduled_tasks = []
@@ -91,13 +115,20 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         tasks_df['Priority Score'] = tasks_df.apply(calc_priority, axis=1)
         tasks_df = tasks_df.sort_values(by=['Priority Score', 'Complexity'])
 
+        # MAIN SCHEDULING LOGIC
         for idx, task in tasks_df.iterrows():
             task_time_remaining = task['Estimated Time']
             task_name = task['Task']
             due_date = task['Due Date']
 
+            # Possibly move or split tasks if partial date is removed? => ASK USER
+            # We do not do it automatically unless you confirm. Currently, tasks on that date vanish
+            # from scheduled_df if the date is not in free_time_df.
+
             if task_time_remaining > 6:
-                warnings.append(f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block.")
+                warnings.append(
+                    f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
+                )
 
             for f_idx, window in free_time_df.iterrows():
                 if task_time_remaining <= 0:
@@ -109,22 +140,36 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                 available_hours = window['Available Hours']
                 if available_hours > 0:
                     allocated_time = min(task_time_remaining, available_hours)
-                    scheduled_tasks.append({'Task': task_name, 'Date': window['Date'], 'Allocated Hours': allocated_time})
+                    scheduled_tasks.append({
+                        'Task': task_name,
+                        'Date': window['Date'],
+                        'Allocated Hours': allocated_time
+                    })
                     free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
                     task_time_remaining -= allocated_time
 
+            # If leftover => user might want "Needs Attention" or partial?
             if pd.notnull(due_date) and task_time_remaining > 0:
-                warnings.append(f"HANDLE: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but only {task['Estimated Time']-task_time_remaining}h scheduled before due date.")
+                warnings.append(
+                    f"HANDLE: {task_name} (Due: {due_date.date()}) "
+                    f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
+                )
 
         scheduled_df = pd.DataFrame(scheduled_tasks)
 
-        # Ensure Date columns are datetime for filtering
+        # Convert scheduled_df to datetime
         scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
 
-        # Filter scheduled_df to only include dates originally present in free_time_df
+        # Filter scheduled_df to only include original_dates
         scheduled_df = scheduled_df[scheduled_df['Date'].isin(original_dates)]
 
-        daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
+        # Build daily_scheduled
+        daily_scheduled = (
+            scheduled_df.groupby('Date')['Allocated Hours']
+            .sum()
+            .reset_index()
+            .rename(columns={'Allocated Hours': 'Total Scheduled'})
+        )
 
         # Ensure both Date columns are datetime
         daily_summary['Date'] = pd.to_datetime(daily_summary['Date'])
@@ -151,3 +196,31 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
     if 'rerun_scheduler' in st.session_state:
         del st.session_state['rerun_scheduler']
+
+
+####################################
+#  Additional Test: Removing a Date
+####################################
+def test_removing_date_in_editor():
+    """
+    This test simulates removing 4/12/2025 from the free_time_df data:
+    1. free_time_df originally has 4/12 and 4/13
+    2. We remove the row for 4/12 
+    3. We run the scheduler logic 
+    4. We expect that daily_scheduled no longer includes 4/12 
+    5. If tasks were on 4/12, do we want them re-scheduled or 'Needs Attention'?
+       => We must ask the user. Currently, we just drop them if the date doesn't exist.
+    """
+    # We won't run the entire Streamlit flow here, but we show the logic.
+    # Ideally you integrate into a real test framework like pytest.
+    ft = pd.DataFrame({
+        'Date': ['4/12/2025', '4/13/2025'],
+        'Available Hours': [3, 4]
+    })
+    # Remove row for 4/12
+    ft_updated = ft[ft['Date'] != '4/12/2025']
+    assert '4/12/2025' not in ft_updated['Date'].values, "4/12 was not truly removed"
+
+    # Next, you'd run scheduling logic with ft_updated to confirm that 4/12 is gone from daily_summary.
+    # This is just a placeholder for demonstration.
+    pass
