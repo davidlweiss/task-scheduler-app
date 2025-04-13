@@ -121,7 +121,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
                 expand = st.session_state.get('open_task') == task_name
 
-    with st.expander(f"Handle This Task for {task_name}", expanded=expand):
+                    with st.expander(f"Handle This Task for {task_name}", expanded=expand):
                     with st.form(key=f"form_{task_name}"):
                         action = st.radio(
                             "Choose an action:",
@@ -157,7 +157,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                         submitted = st.form_submit_button("Confirm and Apply Action")
 
                         if submitted:
-        st.session_state['open_task'] = task_name
+                            st.session_state['open_task'] = task_name
                             if action == 'Reduce Estimated Time' and new_time:
                                 tasks_df.loc[tasks_df['Task'] == task_name, 'Estimated Time'] = new_time
                                 tasks_df.to_csv(tasks_file, index=False)
