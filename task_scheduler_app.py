@@ -306,32 +306,27 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                     # Display the warning in a yellow box
                     st.warning(warning)
                     
-                    # Use unique keys for each warning to prevent collapsing
+                    # Create a container for resolution options
+                    resolution_container = st.container()
+                    
+                    # Create unique keys for this warning
                     warning_key = f"warning_{i}_{task_name.replace(' ', '_')}"
                     
-                    # Create a resolution box with options - always expanded
-                    with st.expander("Resolve this warning", expanded=True):
-                        resolution_option = st.radio(
-                            "How would you like to resolve this issue?",
-                            [
-                                "Add more free time before the due date",
-                                "Reduce the estimated time for this task",
-                                "Move other tasks to make room for this one",
-                                "Adjust the due date for this task",
-                                "Mark as acknowledged (will handle manually)"
-                            ],
-                            key=f"resolution_{warning_key}"
-                        )
+                    # Radio button for resolution options
+                    with resolution_container:
+                        st.write("### Resolution Options")
                         
-                        # Store the selected option in session state to preserve it
-                        option_key = f"option_{warning_key}"
-                        if option_key not in st.session_state:
-                            st.session_state[option_key] = resolution_option
-                        else:
-                            st.session_state[option_key] = resolution_option
+                        # Create tabs for different resolution options
+                        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                            "Add Time", 
+                            "Reduce Estimate", 
+                            "Move Tasks", 
+                            "Adjust Due Date",
+                            "Acknowledge"
+                        ])
                         
-                        if resolution_option == "Add more free time before the due date":
-                            # Find the due date for this task
+                        with tab1:
+                            # Add more free time before the due date
                             task_row = tasks_df[tasks_df['Task'] == task_name]
                             if not task_row.empty:
                                 due_date = task_row['Due Date'].iloc[0]
@@ -384,8 +379,8 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                         st.success(f"Added {add_hours} hours on {add_date}. Rescheduling...")
                                         st.rerun()
                         
-                        elif resolution_option == "Reduce the estimated time for this task":
-                            # Find the task and its current estimate
+                        with tab2:
+                            # Reduce the estimated time for this task
                             task_row = tasks_df[tasks_df['Task'] == task_name]
                             if not task_row.empty:
                                 current_estimate = task_row['Estimated Time'].iloc[0]
@@ -423,11 +418,12 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                     st.success(f"Updated estimate to {new_estimate}h. Rescheduling...")
                                     st.rerun()
                         
-                        elif resolution_option == "Move other tasks to make room for this one":
+                        with tab3:
+                            # Move other tasks to make room for this one
                             st.info("This feature is coming soon. For now, please use the task editor to manually adjust task priorities.")
                         
-                        elif resolution_option == "Adjust the due date for this task":
-                            # Find the task and its current due date
+                        with tab4:
+                            # Adjust the due date for this task
                             task_row = tasks_df[tasks_df['Task'] == task_name]
                             if not task_row.empty:
                                 current_due_date = task_row['Due Date'].iloc[0]
@@ -456,11 +452,14 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                         st.success(f"Updated due date to {new_due_date}. Rescheduling...")
                                         st.rerun()
                         
-                        elif resolution_option == "Mark as acknowledged (will handle manually)":
-                            if st.button("Acknowledge", key=f"acknowledge_{warning_key}"):
-                                # Remove this warning from our list by not adding it to a new warnings list
+                        with tab5:
+                            # Mark as acknowledged
+                            st.write("Mark this warning as acknowledged if you'll handle it manually.")
+                            if st.button("Acknowledge Warning", key=f"acknowledge_{warning_key}"):
                                 st.success("Warning acknowledged. You'll need to handle this manually.")
-                                # We don't need to rerun or make any changes to the data
+                    
+                    # Add a separator between warnings
+                    st.markdown("---")
                 else:
                     # Display other warnings (not HANDLE: warnings)
                     st.warning(warning)
