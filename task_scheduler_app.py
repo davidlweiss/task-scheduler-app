@@ -8,9 +8,7 @@ from datetime import datetime
 tasks_file = 'tasks.csv'
 free_time_file = 'free_time.csv'
 
-st.title("Dynamic Task Scheduler V8")
-
-# Initialize session state for wizard
+# Initialize session state for wizard at the very beginning
 if 'wizard_mode' not in st.session_state:
     st.session_state.wizard_mode = False
 if 'wizard_step' not in st.session_state:
@@ -22,19 +20,8 @@ if 'wizard_task' not in st.session_state:
 if 'wizard_approach' not in st.session_state:
     st.session_state.wizard_approach = None
 
-# Load or initialize data
-def load_data(file_path, columns):
-    """
-    Loads a CSV if present, else returns an empty DataFrame with specified columns.
-    """
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    else:
-        return pd.DataFrame(columns=columns)
-
-# Load data
-tasks_df = load_data(tasks_file, ['Project', 'Task', 'Estimated Time', 'Due Date', 'Importance', 'Complexity'])
-free_time_df = load_data(free_time_file, ['Date', 'Available Hours'])
+# For debugging
+# st.write(f"DEBUG: Wizard mode = {st.session_state.wizard_mode}")
 
 # Function to start wizard mode
 def start_wizard():
@@ -60,9 +47,24 @@ def next_wizard_step():
 def prev_wizard_step():
     st.session_state.wizard_step = max(1, st.session_state.wizard_step - 1)
 
-# Check if we're in wizard mode
+# Load or initialize data
+def load_data(file_path, columns):
+    """
+    Loads a CSV if present, else returns an empty DataFrame with specified columns.
+    """
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    else:
+        return pd.DataFrame(columns=columns)
+
+# Load data
+tasks_df = load_data(tasks_file, ['Project', 'Task', 'Estimated Time', 'Due Date', 'Importance', 'Complexity'])
+free_time_df = load_data(free_time_file, ['Date', 'Available Hours'])
+
+# TOP LEVEL UI DECISION - Check if we're in wizard mode first, before rendering any UI
 if st.session_state.wizard_mode:
     # WIZARD MODE
+    st.title("Dynamic Task Scheduler V8")
     st.markdown("## Task Breakdown Wizard")
     
     # Create a progress bar
@@ -246,9 +248,7 @@ if st.session_state.wizard_mode:
                         exit_wizard()
                         st.rerun()
                     else:
-                        # Automatically exit after 3 seconds
-                        import time
-                        time.sleep(3)
+                        # Auto-exit
                         exit_wizard()
                         st.rerun()
         
@@ -334,16 +334,9 @@ if st.session_state.wizard_mode:
                     # Show success message
                     st.success(f"Created {num_subtasks} subtasks. Original task has been removed.")
                     
-                    # Return to main app
-                    if st.button("Return to App"):
-                        exit_wizard()
-                        st.rerun()
-                    else:
-                        # Automatically exit after 3 seconds
-                        import time
-                        time.sleep(3)
-                        exit_wizard()
-                        st.rerun()
+                    # Auto-exit
+                    exit_wizard()
+                    st.rerun()
         
         elif "Focus Sessions" in approach:
             with st.form(key="focus_form"):
@@ -414,16 +407,9 @@ if st.session_state.wizard_mode:
                     # Show success message
                     st.success(f"Updated task to use {num_sessions} focus sessions of {session_length}h each.")
                     
-                    # Return to main app
-                    if st.button("Return to App"):
-                        exit_wizard()
-                        st.rerun()
-                    else:
-                        # Automatically exit after 3 seconds
-                        import time
-                        time.sleep(3)
-                        exit_wizard()
-                        st.rerun()
+                    # Auto-exit
+                    exit_wizard()
+                    st.rerun()
         
         elif "Iterative Project" in approach:
             with st.form(key="iterative_form"):
@@ -489,16 +475,9 @@ if st.session_state.wizard_mode:
                     # Show success message
                     st.success("Created iterative project structure with initial exploration session and placeholder for remaining work.")
                     
-                    # Return to main app
-                    if st.button("Return to App"):
-                        exit_wizard()
-                        st.rerun()
-                    else:
-                        # Automatically exit after 3 seconds
-                        import time
-                        time.sleep(3)
-                        exit_wizard()
-                        st.rerun()
+                    # Auto-exit
+                    exit_wizard()
+                    st.rerun()
         
         elif "Fixed Duration Event" in approach:
             with st.form(key="event_form"):
@@ -551,19 +530,13 @@ if st.session_state.wizard_mode:
                     # Show success message
                     st.success("Marked as a fixed duration event. It won't be flagged for breakdown again.")
                     
-                    # Return to main app
-                    if st.button("Return to App"):
-                        exit_wizard()
-                        st.rerun()
-                    else:
-                        # Automatically exit after 3 seconds
-                        import time
-                        time.sleep(3)
-                        exit_wizard()
-                        st.rerun()
+                    # Auto-exit
+                    exit_wizard()
+                    st.rerun()
 
 else:
     # MAIN APP INTERFACE
+    st.title("Dynamic Task Scheduler V8")
     
     # Create a tab structure for the main app
     tab1, tab2, tab3 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler"])
