@@ -60,8 +60,16 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
     total_estimated_time = tasks_df['Estimated Time'].sum()
 
     st.markdown(f"### Capacity vs Demand")
-    st.markdown(f"Total Free Time: **{total_free_time} hours**")
-    st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
+st.markdown(f"Total Free Time: **{total_free_time} hours**")
+st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
+
+st.markdown("### Daily Capacity vs Demand")
+daily_summary = free_time_df.groupby('Date')['Available Hours'].sum().reset_index().rename(columns={'Available Hours': 'Total Available'})
+if not scheduled_df.empty:
+    daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
+    daily_summary = daily_summary.merge(daily_scheduled, on='Date', how='left').fillna(0)
+
+st.dataframe(daily_summary)
 
     if total_estimated_time > total_free_time:
         st.warning(f"You are over capacity by {total_estimated_time - total_free_time} hours. Consider reducing tasks, adding free time, or moving due dates.")
