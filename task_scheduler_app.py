@@ -116,6 +116,10 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         scheduled_df = pd.DataFrame(scheduled_tasks)
 
         daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
+        
+        # Ensure both Date columns are datetime
+        daily_summary['Date'] = pd.to_datetime(daily_summary['Date'])
+        daily_scheduled['Date'] = pd.to_datetime(daily_scheduled['Date'])
         daily_summary = daily_summary.merge(daily_scheduled, on='Date', how='left').fillna(0)
 
         st.dataframe(daily_summary)
