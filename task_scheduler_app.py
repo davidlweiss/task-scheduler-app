@@ -121,7 +121,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
                 expand = st.session_state.get('open_task') == task_name
 
-                    with st.expander(f"Handle This Task for {task_name}", expanded=expand):
+                with st.expander(f"Handle This Task for {task_name}", expanded=expand):
                     with st.form(key=f"form_{task_name}"):
                         action = st.radio(
                             "Choose an action:",
