@@ -118,8 +118,12 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         # Ensure Date columns are datetime for filtering
         scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
 
-        # Filter scheduled_df to only include dates in free_time_df
-        scheduled_df = scheduled_df[scheduled_df['Date'].isin(free_time_df['Date'])]
+        # Filter scheduled_df to only include dates in free_time_df where Available Hours > 0
+        valid_dates = free_time_df[free_time_df['Available Hours'] > 0]['Date']
+
+        # Ensure Date columns are datetime for filtering
+        scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
+        scheduled_df = scheduled_df[scheduled_df['Date'].isin(valid_dates)]
 
         daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
         
