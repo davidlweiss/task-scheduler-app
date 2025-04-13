@@ -35,7 +35,11 @@ if uploaded_free_time:
 
 # Editable data tables
 st.subheader("Edit Tasks")
-st.data_editor(tasks_df, num_rows="dynamic", use_container_width=True, column_config={"Task": st.column_config.Column(width='large')}, disabled=False)
+
+if st.checkbox("Enable Sorting Mode (View Only)"):
+    st.dataframe(tasks_df, use_container_width=True)
+else:
+    st.data_editor(tasks_df, num_rows="dynamic", use_container_width=True, column_config={"Task": st.column_config.Column(width='large')}, disabled=False)
 tasks_df.to_csv(tasks_file, index=False)
 
 st.subheader("Edit Free Time Windows")
