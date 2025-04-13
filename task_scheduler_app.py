@@ -52,6 +52,9 @@ free_time_df.to_csv(free_time_file, index=False)
 if 'action_results' not in st.session_state:
     st.session_state['action_results'] = []
 
+# Capture original dates before scheduling
+original_dates = pd.to_datetime(free_time_df['Date'].unique())
+
 # Run Scheduler Button
 if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
@@ -118,15 +121,11 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         # Ensure Date columns are datetime for filtering
         scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
 
-        # Filter scheduled_df to only include dates in free_time_df where Available Hours > 0
-        valid_dates = free_time_df[free_time_df['Available Hours'] > 0]['Date']
-
-        # Ensure Date columns are datetime for filtering
-        scheduled_df['Date'] = pd.to_datetime(scheduled_df['Date'])
-        scheduled_df = scheduled_df[scheduled_df['Date'].isin(valid_dates)]
+        # Filter scheduled_df to only include dates originally present in free_time_df
+        scheduled_df = scheduled_df[scheduled_df['Date'].isin(original_dates)]
 
         daily_scheduled = scheduled_df.groupby('Date')['Allocated Hours'].sum().reset_index().rename(columns={'Allocated Hours': 'Total Scheduled'})
-        
+
         # Ensure both Date columns are datetime
         daily_summary['Date'] = pd.to_datetime(daily_summary['Date'])
         daily_scheduled['Date'] = pd.to_datetime(daily_scheduled['Date'])
