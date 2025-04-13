@@ -7,7 +7,7 @@ from datetime import datetime
 tasks_file = 'tasks.csv'
 free_time_file = 'free_time.csv'
 
-st.title("Dynamic Task Scheduler V5")
+st.title("Dynamic Task Scheduler V6")
 
 # Load or initialize data
 def load_data(file_path, columns):
@@ -46,21 +46,17 @@ free_time_df.to_csv(free_time_file, index=False)
 if st.button("Run Scheduler"):
     st.subheader("Scheduled Tasks")
 
-    # Prepare data
     today = pd.to_datetime(datetime.today().date())
 
     tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date'], errors='coerce')
     free_time_df['Date'] = pd.to_datetime(free_time_df['Date'])
     free_time_df = free_time_df.sort_values(by='Date')
 
-    # Calculate Priority Score
     def calc_priority(row):
         days_until_due = (row['Due Date'] - today).days if pd.notnull(row['Due Date']) else 9999
         return days_until_due * 1 - row['Importance'] * 5
 
     tasks_df['Priority Score'] = tasks_df.apply(calc_priority, axis=1)
-
-    # Sort tasks by Priority Score then Complexity
     tasks_df = tasks_df.sort_values(by=['Priority Score', 'Complexity'])
 
     scheduled_tasks = []
@@ -92,7 +88,7 @@ if st.button("Run Scheduler"):
                 task_time_remaining -= allocated_time
 
         if pd.notnull(due_date) and task_time_remaining > 0:
-            warnings.append(f"WARNING: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but only {task['Estimated Time']-task_time_remaining}h scheduled before due date.")
+            warnings.append(f"HANDLE: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but only {task['Estimated Time']-task_time_remaining}h scheduled before due date.")
 
     scheduled_df = pd.DataFrame(scheduled_tasks)
 
@@ -108,6 +104,24 @@ if st.button("Run Scheduler"):
         st.write("No scheduled tasks yet.")
 
     if warnings:
-        st.subheader("Warnings")
+        st.subheader("Warnings & Handle Options")
         for warning in warnings:
             st.warning(warning)
+
+            with st.expander(f"Handle This Task"): 
+                action = st.radio("Choose an action:", [
+                    'Add More Free Time (manual)',
+                    'Reduce Estimated Time',
+                    'Move Due Date',
+                    'Accept Partial Completion & Create Follow-up Task',
+                    'Deprioritize Other Tasks',
+                    'Skip for Now'
+                ])
+
+                if action == 'Reduce Estimated Time':
+                    new_time = st.number_input("Enter new estimated time (hours):", min_value=0.5, step=0.5)
+
+                if action == 'Move Due Date':
+                    new_due_date = st.date_input("Pick new due date:")
+
+                st.button("Confirm and Apply Action")
