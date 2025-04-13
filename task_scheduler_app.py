@@ -126,11 +126,16 @@ if st.button("Run Scheduler"):
                     )
 
                     if action == 'Reduce Estimated Time':
+                        new_time_key = f"new_time_{task_name}"
+                        if new_time_key not in st.session_state:
+                            st.session_state[new_time_key] = task['Estimated Time']
+
                         new_time = st.number_input(
                             "Enter new estimated time (hours):",
                             min_value=0.5,
                             step=0.5,
-                            key=f"new_time_{task_name}"
+                            value=st.session_state[new_time_key],
+                            key=new_time_key
                         )
 
                     if action == 'Move Due Date':
