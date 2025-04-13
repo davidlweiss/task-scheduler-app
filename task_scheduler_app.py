@@ -3,6 +3,9 @@ import pandas as pd
 import os
 from datetime import datetime
 
+# Add the math library
+import math
+
 # File paths
 tasks_file = 'tasks.csv'
 free_time_file = 'free_time.csv'
