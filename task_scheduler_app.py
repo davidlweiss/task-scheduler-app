@@ -297,7 +297,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         if warnings:
             st.subheader("Warnings & Handle Options")
             
-            for warning in warnings:
+            for i, warning in enumerate(warnings):
                 if warning.startswith("HANDLE:"):
                     # Extract task details from the warning
                     task_info = warning.replace("HANDLE:", "").strip()
@@ -306,8 +306,11 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                     # Display the warning in a yellow box
                     st.warning(warning)
                     
-                    # Create a resolution box with options
-                    with st.expander("Resolve this warning"):
+                    # Use unique keys for each warning to prevent collapsing
+                    warning_key = f"warning_{i}_{task_name.replace(' ', '_')}"
+                    
+                    # Create a resolution box with options - always expanded
+                    with st.expander("Resolve this warning", expanded=True):
                         resolution_option = st.radio(
                             "How would you like to resolve this issue?",
                             [
@@ -317,8 +320,15 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                 "Adjust the due date for this task",
                                 "Mark as acknowledged (will handle manually)"
                             ],
-                            key=f"resolution_{task_name.replace(' ', '_')}"
+                            key=f"resolution_{warning_key}"
                         )
+                        
+                        # Store the selected option in session state to preserve it
+                        option_key = f"option_{warning_key}"
+                        if option_key not in st.session_state:
+                            st.session_state[option_key] = resolution_option
+                        else:
+                            st.session_state[option_key] = resolution_option
                         
                         if resolution_option == "Add more free time before the due date":
                             # Find the due date for this task
@@ -347,15 +357,15 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                         add_date = st.date_input("Date to add time", 
                                                               value=pd.to_datetime(due_date) - pd.Timedelta(days=1),
                                                               max_value=pd.to_datetime(due_date),
-                                                              key=f"add_date_{task_name.replace(' ', '_')}")
+                                                              key=f"add_date_{warning_key}")
                                     with col2:
                                         add_hours = st.number_input("Hours to add", 
                                                                 min_value=0.5, 
                                                                 value=time_needed if time_needed > 0 else 1.0,
                                                                 step=0.5,
-                                                                key=f"add_hours_{task_name.replace(' ', '_')}")
+                                                                key=f"add_hours_{warning_key}")
                                     
-                                    if st.button("Add This Time", key=f"add_time_{task_name.replace(' ', '_')}"):
+                                    if st.button("Add This Time", key=f"add_time_{warning_key}"):
                                         pd_date = pd.to_datetime(add_date)
                                         
                                         # Check if date already exists in free_time_df
@@ -388,17 +398,21 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                     except:
                                         scheduled_time = 0
                                 
-                                # Get new estimate
+                                # Show current estimate and get new estimate
+                                st.write(f"Current estimate: **{current_estimate}h**")
+                                st.write(f"Currently scheduled: **{scheduled_time}h**")
+                                
                                 new_estimate = st.number_input(
-                                    f"Current estimate: {current_estimate}h. New estimate:",
+                                    "New estimate (hours):",
                                     min_value=scheduled_time,
-                                    max_value=current_estimate,
+                                    max_value=float(current_estimate),
                                     value=scheduled_time,
                                     step=0.5,
-                                    key=f"new_estimate_{task_name.replace(' ', '_')}"
+                                    key=f"new_estimate_{warning_key}"
                                 )
                                 
-                                if st.button("Update Estimate", key=f"update_estimate_{task_name.replace(' ', '_')}"):
+                                # Always show the update button
+                                if st.button("Update Estimate", key=f"update_estimate_{warning_key}"):
                                     # Update the task's estimated time
                                     idx = task_row.index[0]
                                     tasks_df.at[idx, 'Estimated Time'] = new_estimate
@@ -409,6 +423,9 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                     st.success(f"Updated estimate to {new_estimate}h. Rescheduling...")
                                     st.rerun()
                         
+                        elif resolution_option == "Move other tasks to make room for this one":
+                            st.info("This feature is coming soon. For now, please use the task editor to manually adjust task priorities.")
+                        
                         elif resolution_option == "Adjust the due date for this task":
                             # Find the task and its current due date
                             task_row = tasks_df[tasks_df['Task'] == task_name]
@@ -417,15 +434,18 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                 if pd.notnull(current_due_date):
                                     current_due_date = pd.to_datetime(current_due_date)
                                     
+                                    # Show current due date
+                                    st.write(f"Current due date: **{current_due_date.strftime('%Y-%m-%d')}**")
+                                    
                                     # Get new due date
                                     new_due_date = st.date_input(
-                                        f"Current due date: {current_due_date.strftime('%Y-%m-%d')}. New due date:",
+                                        "New due date:",
                                         value=current_due_date + pd.Timedelta(days=1),
-                                        min_value=current_due_date,
-                                        key=f"new_due_date_{task_name.replace(' ', '_')}"
+                                        min_value=pd.to_datetime(datetime.today()),
+                                        key=f"new_due_date_{warning_key}"
                                     )
                                     
-                                    if st.button("Update Due Date", key=f"update_due_date_{task_name.replace(' ', '_')}"):
+                                    if st.button("Update Due Date", key=f"update_due_date_{warning_key}"):
                                         # Update the task's due date
                                         idx = task_row.index[0]
                                         tasks_df.at[idx, 'Due Date'] = pd.to_datetime(new_due_date)
@@ -437,7 +457,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                                         st.rerun()
                         
                         elif resolution_option == "Mark as acknowledged (will handle manually)":
-                            if st.button("Acknowledge", key=f"acknowledge_{task_name.replace(' ', '_')}"):
+                            if st.button("Acknowledge", key=f"acknowledge_{warning_key}"):
                                 # Remove this warning from our list by not adding it to a new warnings list
                                 st.success("Warning acknowledged. You'll need to handle this manually.")
                                 # We don't need to rerun or make any changes to the data
