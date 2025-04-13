@@ -110,7 +110,14 @@ if st.button("Run Scheduler"):
     scheduled_df = pd.DataFrame(scheduled_tasks)
 
     if not scheduled_df.empty:
-        st.dataframe(scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna(''))
+        # Pivot and reorder columns to show non-empty first
+        pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
+        non_empty_cols = pivot_df.columns[pivot_df.notna().any()].tolist()
+        empty_cols = pivot_df.columns[~pivot_df.notna().any()].tolist()
+        ordered_cols = non_empty_cols + empty_cols
+        pivot_df = pivot_df[ordered_cols]
+
+        st.dataframe(pivot_df)
     else:
         st.write("No scheduled tasks yet.")
 
