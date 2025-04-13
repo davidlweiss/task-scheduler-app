@@ -133,14 +133,14 @@ if not free_time_df.empty:
                 
                 # Save changes
                 free_time_df.to_csv(free_time_file, index=False)
-                st.experimental_rerun()
+                st.rerun()
                 
         with col4:
             # Delete button
             if st.button("🗑️ Delete", key=f"del_{idx}"):
                 free_time_df = free_time_df.drop(idx)
                 free_time_df.to_csv(free_time_file, index=False)
-                st.experimental_rerun()
+                st.rerun()
     
     # Show a summary
     st.info(f"Total free time available: {free_time_df['Available Hours'].sum()} hours")
