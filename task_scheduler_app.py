@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 
 # File paths
 tasks_file = 'tasks.csv'
 free_time_file = 'free_time.csv'
 
-st.title("Dynamic Task Scheduler V4")
+st.title("Dynamic Task Scheduler V5")
 
 # Load or initialize data
 def load_data(file_path, columns):
@@ -45,26 +46,30 @@ free_time_df.to_csv(free_time_file, index=False)
 if st.button("Run Scheduler"):
     st.subheader("Scheduled Tasks")
 
-    # Split tasks
-    tasks_due = tasks_df.dropna(subset=['Due Date']).copy()
-    tasks_due['Due Date'] = pd.to_datetime(tasks_due['Due Date'])
-    tasks_due = tasks_due.sort_values(by=['Due Date', 'Importance', 'Complexity'])
+    # Prepare data
+    today = pd.to_datetime(datetime.today().date())
 
-    tasks_no_due = tasks_df[tasks_df['Due Date'].isna()].copy()
-    tasks_no_due = tasks_no_due.sort_values(by=['Importance', 'Complexity'])
-
+    tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date'], errors='coerce')
     free_time_df['Date'] = pd.to_datetime(free_time_df['Date'])
     free_time_df = free_time_df.sort_values(by='Date')
+
+    # Calculate Priority Score
+    def calc_priority(row):
+        days_until_due = (row['Due Date'] - today).days if pd.notnull(row['Due Date']) else 9999
+        return days_until_due * 1 - row['Importance'] * 5
+
+    tasks_df['Priority Score'] = tasks_df.apply(calc_priority, axis=1)
+
+    # Sort tasks by Priority Score then Complexity
+    tasks_df = tasks_df.sort_values(by=['Priority Score', 'Complexity'])
 
     scheduled_tasks = []
     warnings = []
 
-    # Function to check if task is a Work Block
     def is_work_block(task_name):
         return 'Work Block' in task_name or 'Session' in task_name
 
-    # Schedule due date tasks
-    for _, task in tasks_due.iterrows():
+    for _, task in tasks_df.iterrows():
         task_time_remaining = task['Estimated Time']
         task_name = task['Task']
         due_date = task['Due Date']
@@ -75,7 +80,8 @@ if st.button("Run Scheduler"):
         for idx, window in free_time_df.iterrows():
             if task_time_remaining <= 0:
                 break
-            if window['Date'] > due_date:
+
+            if pd.notnull(due_date) and window['Date'] > due_date:
                 break
 
             available_hours = window['Available Hours']
@@ -85,32 +91,12 @@ if st.button("Run Scheduler"):
                 free_time_df.at[idx, 'Available Hours'] -= allocated_time
                 task_time_remaining -= allocated_time
 
-        if task_time_remaining > 0:
+        if pd.notnull(due_date) and task_time_remaining > 0:
             warnings.append(f"WARNING: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but only {task['Estimated Time']-task_time_remaining}h scheduled before due date.")
-
-    # Schedule tasks with no due date
-    for _, task in tasks_no_due.iterrows():
-        task_time_remaining = task['Estimated Time']
-        task_name = task['Task']
-
-        if task_time_remaining > 6 and not is_work_block(task_name):
-            warnings.append(f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block.")
-
-        for idx, window in free_time_df.iterrows():
-            if task_time_remaining <= 0:
-                break
-
-            available_hours = window['Available Hours']
-            if available_hours > 0:
-                allocated_time = min(task_time_remaining, available_hours)
-                scheduled_tasks.append({'Task': task_name, 'Date': window['Date'], 'Allocated Hours': allocated_time})
-                free_time_df.at[idx, 'Available Hours'] -= allocated_time
-                task_time_remaining -= allocated_time
 
     scheduled_df = pd.DataFrame(scheduled_tasks)
 
     if not scheduled_df.empty:
-        # Pivot and reorder columns to show non-empty first
         pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
         non_empty_cols = pivot_df.columns[pivot_df.notna().any()].tolist()
         empty_cols = pivot_df.columns[~pivot_df.notna().any()].tolist()
