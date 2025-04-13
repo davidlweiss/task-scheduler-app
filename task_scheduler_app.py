@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import os
@@ -45,7 +44,6 @@ free_time_df.to_csv(free_time_file, index=False)
 # Scheduling Logic
 st.subheader("Scheduled Tasks")
 
-
 # Split tasks
 tasks_due = tasks_df.dropna(subset=['Due Date']).copy()
 tasks_due['Due Date'] = pd.to_datetime(tasks_due['Due Date'])
@@ -80,7 +78,7 @@ for _, task in tasks_due.iterrows():
             task_time_remaining -= allocated_time
 
     if task_time_remaining > 0:
-        warnings.append(f"WARNING: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but {task['Estimated Time']-task_time_remaining}h scheduled before due date.")
+        warnings.append(f"WARNING: {task_name} (Due: {due_date.date()}) needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date.")
 
 # Schedule tasks with no due date
 for _, task in tasks_no_due.iterrows():
@@ -95,7 +93,7 @@ for _, task in tasks_no_due.iterrows():
         if available_hours > 0:
             allocated_time = min(task_time_remaining, available_hours)
             scheduled_tasks.append({'Task': task_name, 'Date': window['Date'], 'Allocated Hours': allocated_time})
-            free_time_df.at[idx, 'Available Hours'] -= allocated_hours
+            free_time_df.at[idx, 'Available Hours'] -= allocated_time
             task_time_remaining -= allocated_time
 
 scheduled_df = pd.DataFrame(scheduled_tasks)
