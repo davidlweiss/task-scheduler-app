@@ -42,9 +42,17 @@ st.subheader("Edit Free Time Windows")
 free_time_df = st.data_editor(free_time_df, num_rows="dynamic")
 free_time_df.to_csv(free_time_file, index=False)
 
+# Decision Results Storage
+if 'action_results' not in st.session_state:
+    st.session_state['action_results'] = []
+
 # Run Scheduler Button
-if st.button("Run Scheduler"):
+if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
+
     st.subheader("Scheduled Tasks")
+
+    if 'rerun_scheduler' in st.session_state:
+        del st.session_state['rerun_scheduler']
 
     today = pd.to_datetime(datetime.today().date())
 
@@ -65,7 +73,7 @@ if st.button("Run Scheduler"):
     def is_work_block(task_name):
         return 'Work Block' in task_name or 'Session' in task_name
 
-    for _, task in tasks_df.iterrows():
+    for idx, task in tasks_df.iterrows():
         task_time_remaining = task['Estimated Time']
         task_name = task['Task']
         due_date = task['Due Date']
@@ -73,7 +81,7 @@ if st.button("Run Scheduler"):
         if task_time_remaining > 6 and not is_work_block(task_name):
             warnings.append(f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block.")
 
-        for idx, window in free_time_df.iterrows():
+        for f_idx, window in free_time_df.iterrows():
             if task_time_remaining <= 0:
                 break
 
@@ -84,7 +92,7 @@ if st.button("Run Scheduler"):
             if available_hours > 0:
                 allocated_time = min(task_time_remaining, available_hours)
                 scheduled_tasks.append({'Task': task_name, 'Date': window['Date'], 'Allocated Hours': allocated_time})
-                free_time_df.at[idx, 'Available Hours'] -= allocated_time
+                free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
                 task_time_remaining -= allocated_time
 
         if pd.notnull(due_date) and task_time_remaining > 0:
@@ -126,6 +134,9 @@ if st.button("Run Scheduler"):
                             key=f"action_{task_name}"
                         )
 
+                        new_time = None
+                        new_due_date = None
+
                         if action == 'Reduce Estimated Time':
                             new_time = st.number_input(
                                 "Enter new estimated time (hours):",
@@ -144,4 +155,18 @@ if st.button("Run Scheduler"):
                         submitted = st.form_submit_button("Confirm and Apply Action")
 
                         if submitted:
-                            st.success(f"Action '{action}' confirmed for task {task_name}")
+                            if action == 'Reduce Estimated Time' and new_time:
+                                tasks_df.loc[tasks_df['Task'] == task_name, 'Estimated Time'] = new_time
+                                tasks_df.to_csv(tasks_file, index=False)
+                                st.success(f"Updated Estimated Time to {new_time} hours")
+
+                            elif action == 'Move Due Date' and new_due_date:
+                                tasks_df.loc[tasks_df['Task'] == task_name, 'Due Date'] = pd.to_datetime(new_due_date)
+                                tasks_df.to_csv(tasks_file, index=False)
+                                st.success(f"Moved Due Date to {new_due_date}")
+
+                            else:
+                                st.info(f"Action '{action}' noted for {task_name}. Please adjust manually if needed.")
+
+                            st.session_state['rerun_scheduler'] = True
+                            st.button("Run Scheduler Again", key=f"rerun_{task_name}")
