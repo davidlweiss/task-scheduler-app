@@ -13,7 +13,7 @@ st.title("Dynamic Task Scheduler V6")
 def load_data(file_path, columns):
     if os.path.exists(file_path):
         return pd.read_csv(file_path)
-    else:
+        else:
         return pd.DataFrame(columns=columns)
 
 # Load data
@@ -60,8 +60,8 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
     total_estimated_time = tasks_df['Estimated Time'].sum()
 
     st.markdown(f"### Capacity vs Demand")
-st.markdown(f"Total Free Time: **{total_free_time} hours**")
-st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
+    st.markdown(f"Total Free Time: **{total_free_time} hours**")
+    st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
 
 st.markdown("### Daily Capacity vs Demand")
 daily_summary = free_time_df.groupby('Date')['Available Hours'].sum().reset_index().rename(columns={'Available Hours': 'Total Available'})
@@ -71,7 +71,7 @@ if not scheduled_df.empty:
 
 st.dataframe(daily_summary)
 
-    if total_estimated_time > total_free_time:
+        if total_estimated_time > total_free_time:
         st.warning(f"You are over capacity by {total_estimated_time - total_free_time} hours. Consider reducing tasks, adding free time, or moving due dates.")
     else:
         st.success(f"You have {total_free_time - total_estimated_time} hours of free capacity remaining.")
