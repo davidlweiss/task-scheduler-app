@@ -303,7 +303,7 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
         else:
             st.write("No tasks could be scheduled with the current free time availability.")
 
-        # Process large tasks first
+                        # Process large tasks first
         if large_tasks:
             st.subheader("Tasks That Need Breakdown")
             
@@ -317,295 +317,330 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
                 st.warning(f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block.")
                 
                 if is_very_large:
-                    st.markdown(f"**This task is estimated at {hours} hours**, which suggests it may need planning and breakdown. How would you like to proceed?")
+                    st.markdown(f"**This task is estimated at {hours} hours**, which suggests it may need planning and breakdown. Choose one approach:")
                 else:
-                    st.markdown(f"**This task is estimated at {hours} hours**. How would you like to handle it?")
+                    st.markdown(f"**This task is estimated at {hours} hours**. Choose one approach:")
                 
-                # Create options based on task size
-                options = []
+                # Create a row of buttons instead of radio buttons
+                col1, col2 = st.columns(2)
+                with col1:
+                    if is_very_large:
+                        planning_btn = st.button("📋 Schedule a Planning Session", key=f"planning_{task_key}")
+                        breakdown_btn = st.button("✂️ Break it Down Now", key=f"breakdown_{task_key}")
+                    else:
+                        project_btn = st.button("🔍 Project Breakdown", key=f"project_{task_key}")
+                        planning_btn = st.button("📋 Schedule Planning", key=f"planning_{task_key}")
+                
+                with col2:
+                    if is_very_large:
+                        focus_btn = st.button("🔄 Split into Focus Sessions", key=f"focus_{task_key}")
+                        iterative_btn = st.button("🌱 Iterative Project", key=f"iterative_{task_key}")
+                    else:
+                        focus_btn = st.button("🔄 Focus Sessions", key=f"focus_{task_key}")
+                        event_btn = st.button("📅 Fixed Duration Event", key=f"event_{task_key}")
+                
+                # Create containers for each option that will only show if button is clicked
+                planning_container = st.empty()
+                breakdown_container = st.empty()
+                focus_container = st.empty()
+                iterative_container = st.empty()
+                event_container = st.empty()
+                
+                # Store button state in session state
+                btn_key = f"btn_state_{task_key}"
+                if btn_key not in st.session_state:
+                    st.session_state[btn_key] = None
+                
+                # Detect which button was clicked
                 if is_very_large:
-                    options = [
-                        "Schedule a planning session - Create a 1-hour task to plan the breakdown",
-                        "Break it down now - Split into multiple related subtasks",
-                        "Split into Focus Sessions - Keep as one task but divide into multiple work sessions",
-                        "Iterative Project - Create a structure for a project that will evolve as work progresses"
-                    ]
+                    if planning_btn:
+                        st.session_state[btn_key] = "planning"
+                    elif breakdown_btn:
+                        st.session_state[btn_key] = "breakdown"
+                    elif focus_btn:
+                        st.session_state[btn_key] = "focus"
+                    elif iterative_btn:
+                        st.session_state[btn_key] = "iterative"
                 else:
-                    options = [
-                        "Project - Break this into multiple related subtasks",
-                        "Focus Sessions - Keep as one task but split into multiple work sessions",
-                        "Planning Needed - Schedule time to think through the breakdown",
-                        "Event/Fixed Duration - This is a fixed-duration activity I can't change"
-                    ]
+                    if project_btn:
+                        st.session_state[btn_key] = "project"
+                    elif planning_btn:
+                        st.session_state[btn_key] = "planning"
+                    elif focus_btn:
+                        st.session_state[btn_key] = "focus"
+                    elif event_btn:
+                        st.session_state[btn_key] = "event"
                 
-                selected_option = st.radio("Choose an approach:", options, key=f"option_{task_key}")
-                
-                # Handle the selected option
-                if "planning session" in selected_option or "Planning Needed" in selected_option:
-                    st.info("This will create a 1-hour planning task to help you break down this work later.")
-                    
-                    # Form to create planning task
-                    with st.form(key=f"planning_form_{task_key}"):
-                        planning_task_name = st.text_input(
-                            "Planning task name:", 
-                            value=f"Plan breakdown of: {task_name}", 
-                            key=f"planning_name_{task_key}"
-                        )
+                # Show the appropriate form based on button state
+                if st.session_state[btn_key] == "planning":
+                    with planning_container.container():
+                        st.info("This will create a 1-hour planning task to help you break down this work later.")
                         
-                        planning_date = st.date_input(
-                            "When do you want to plan this?", 
-                            value=datetime.today(), 
-                            key=f"planning_date_{task_key}"
-                        )
-                        
-                        planning_hours = st.slider(
-                            "Planning time needed (hours):", 
-                            min_value=0.5, 
-                            max_value=2.0, 
-                            value=1.0, 
-                            step=0.5, 
-                            key=f"planning_hours_{task_key}"
-                        )
-                        
-                        create_planning = st.form_submit_button("Create Planning Task")
-                        
-                        if create_planning:
-                            # Add the planning task
-                            new_task = pd.DataFrame({
-                                'Project': task['Project'] if 'Project' in task else "Planning",
-                                'Task': planning_task_name,
-                                'Estimated Time': planning_hours,
-                                'Due Date': pd.to_datetime(planning_date),
-                                'Importance': 4,  # High importance
-                                'Complexity': 2   # Moderate complexity
-                            })
-                            
-                            # Update original task description to show it's pending planning
-                            tasks_df.at[idx, 'Task'] = f"{task_name} [PENDING PLANNING]"
-                            
-                            # Add planning task and save
-                            tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
-                            tasks_df.to_csv(tasks_file, index=False)
-                            
-                            st.success(f"Created planning task: {planning_task_name}")
-                            st.session_state['rerun_scheduler'] = True
-                            st.rerun()
-                
-                elif "Break it down now" in selected_option or "Project" in selected_option:
-                    st.info("Let's break this down into smaller, related subtasks")
-                    
-                    with st.form(key=f"breakdown_form_{task_key}"):
-                        num_subtasks = st.slider(
-                            "How many subtasks do you want to create?", 
-                            min_value=2, 
-                            max_value=10, 
-                            value=3, 
-                            key=f"num_subtasks_{task_key}"
-                        )
-                        
-                        # Create input fields for each subtask
-                        subtask_names = []
-                        subtask_hours = []
-                        total_hours = 0
-                        
-                        for i in range(num_subtasks):
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                name = st.text_input(
-                                    f"Subtask {i+1} name:", 
-                                    value=f"{task_name} - Part {i+1}",
-                                    key=f"subtask_name_{task_key}_{i}"
-                                )
-                                subtask_names.append(name)
-                            
-                            with col2:
-                                hours_value = hours / num_subtasks if i == 0 else 0
-                                hour = st.number_input(
-                                    "Hours:", 
-                                    min_value=0.5, 
-                                    max_value=float(hours), 
-                                    value=hours_value,
-                                    step=0.5,
-                                    key=f"subtask_hours_{task_key}_{i}"
-                                )
-                                subtask_hours.append(hour)
-                                total_hours += hour
-                        
-                        # Show the total hours allocated
-                        remaining = hours - total_hours
-                        st.write(f"Total allocated: **{total_hours}h** | Original estimate: **{hours}h** | Remaining: **{remaining}h**")
-                        
-                        create_subtasks = st.form_submit_button("Create Subtasks")
-                        
-                        if create_subtasks:
-                            # Create new subtask rows
-                            new_tasks = []
-                            for i in range(num_subtasks):
-                                new_task_row = task.copy()
-                                new_task_row['Task'] = subtask_names[i]
-                                new_task_row['Estimated Time'] = subtask_hours[i]
-                                new_tasks.append(new_task_row)
-                            
-                            # Remove the original task
-                            tasks_df = tasks_df.drop(idx)
-                            
-                            # Add new subtasks
-                            new_tasks_df = pd.DataFrame(new_tasks)
-                            tasks_df = pd.concat([tasks_df, new_tasks_df], ignore_index=True)
-                            
-                            # Save changes
-                            tasks_df.to_csv(tasks_file, index=False)
-                            
-                            st.success(f"Created {num_subtasks} subtasks. Original task has been removed.")
-                            st.session_state['rerun_scheduler'] = True
-                            st.rerun()
-                
-                elif "Focus Sessions" in selected_option:
-                    st.info("Let's split this into multiple focus sessions while keeping it as a single task")
-                    
-                    with st.form(key=f"focus_form_{task_key}"):
-                        # Determine suggested session length
-                        suggested_length = min(4.0, hours / 2)
-                        
-                        session_length = st.slider(
-                            "How long should each focus session be?", 
-                            min_value=1.0, 
-                            max_value=6.0, 
-                            value=suggested_length,
-                            step=0.5,
-                            key=f"session_length_{task_key}"
-                        )
-                        
-                        num_sessions = math.ceil(hours / session_length)
-                        st.write(f"This will create **{num_sessions} sessions** of **{session_length}h** each.")
-                        
-                        # Option to update the task name
-                        update_name = st.checkbox(
-                            "Update the task name to indicate it's a multi-session task?", 
-                            value=True,
-                            key=f"update_name_{task_key}"
-                        )
-                        
-                        new_name = task_name
-                        if update_name:
-                            new_name = st.text_input(
-                                "New task name:", 
-                                value=f"{task_name} [MULTI-SESSION]",
-                                key=f"new_name_{task_key}"
+                        with st.form(key=f"planning_form_{task_key}"):
+                            planning_task_name = st.text_input(
+                                "Planning task name:", 
+                                value=f"Plan breakdown of: {task_name}", 
+                                key=f"planning_name_{task_key}"
                             )
-                        
-                        create_sessions = st.form_submit_button("Create Focus Sessions")
-                        
-                        if create_sessions:
-                            # Update the task
-                            # Update name if requested
-                            if update_name:
-                                tasks_df.at[idx, 'Task'] = new_name
                             
-                            # Add metadata about sessions - make sure columns exist
-                            if 'Focus Sessions' not in tasks_df.columns:
-                                tasks_df['Focus Sessions'] = None
-                            if 'Session Length' not in tasks_df.columns:
-                                tasks_df['Session Length'] = None
-                            
-                            tasks_df.at[idx, 'Focus Sessions'] = num_sessions
-                            tasks_df.at[idx, 'Session Length'] = session_length
-                            
-                            # Save changes
-                            tasks_df.to_csv(tasks_file, index=False)
-                            
-                            st.success(f"Updated task to use {num_sessions} focus sessions of {session_length}h each.")
-                            st.session_state['rerun_scheduler'] = True
-                            st.rerun()
-                
-                elif "Iterative Project" in selected_option:
-                    st.info("Let's set up an iterative project structure that will evolve as work progresses")
-                    
-                    with st.form(key=f"iterative_form_{task_key}"):
-                        # Initial exploration session
-                        exploration_hours = st.slider(
-                            "How long should the initial exploration session be?", 
-                            min_value=1.0, 
-                            max_value=4.0, 
-                            value=2.0,
-                            step=0.5,
-                            key=f"exploration_hours_{task_key}"
-                        )
-                        
-                        # Expected sessions
-                        expected_sessions = math.ceil((hours - exploration_hours) / 4) + 1
-                        st.write(f"Based on the total estimate of {hours}h, you'll likely need about {expected_sessions} sessions.")
-                        
-                        # Create a project container
-                        create_project = st.form_submit_button("Create Iterative Project")
-                        
-                        if create_project:
-                            # Copy most attributes from original task
-                            exploration_task = task.copy()
-                            exploration_task['Project'] = f"Iterative: {task_name}"
-                            exploration_task['Task'] = f"Initial exploration: {task_name}"
-                            exploration_task['Estimated Time'] = exploration_hours
-                            
-                            remaining_task = task.copy()
-                            remaining_task['Project'] = f"Iterative: {task_name}"
-                            remaining_task['Task'] = f"{task_name} [REMAINING WORK]"
-                            remaining_task['Estimated Time'] = hours - exploration_hours
-                            
-                            # Convert to DataFrames
-                            exploration_df = pd.DataFrame([exploration_task])
-                            remaining_df = pd.DataFrame([remaining_task])
-                            
-                            # Remove the original task
-                            tasks_df = tasks_df.drop(idx)
-                            
-                            # Add new tasks
-                            tasks_df = pd.concat([tasks_df, exploration_df, remaining_df], ignore_index=True)
-                            
-                            # Save changes
-                            tasks_df.to_csv(tasks_file, index=False)
-                            
-                            st.success(f"Created iterative project structure with initial exploration session and placeholder for remaining work.")
-                            st.session_state['rerun_scheduler'] = True
-                            st.rerun()
-                
-                elif "Event/Fixed Duration" in selected_option:
-                    st.info("This will mark the task as a fixed-duration event that shouldn't be broken down")
-                    
-                    with st.form(key=f"event_form_{task_key}"):
-                        update_name = st.checkbox(
-                            "Update the task name to indicate it's a fixed event?", 
-                            value=True,
-                            key=f"update_name_{task_key}"
-                        )
-                        
-                        new_name = task_name
-                        if update_name:
-                            new_name = st.text_input(
-                                "New task name:", 
-                                value=f"{task_name} [FIXED EVENT]",
-                                key=f"new_name_{task_key}"
+                            planning_date = st.date_input(
+                                "When do you want to plan this?", 
+                                value=datetime.today(), 
+                                key=f"planning_date_{task_key}"
                             )
-                        
-                        mark_as_event = st.form_submit_button("Mark as Fixed Event")
-                        
-                        if mark_as_event:
-                            # Update the task
-                            # Update name if requested
-                            if update_name:
-                                tasks_df.at[idx, 'Task'] = new_name
                             
-                            # Add metadata about event type
-                            if 'Event Type' not in tasks_df.columns:
-                                tasks_df['Event Type'] = None
+                            planning_hours = st.slider(
+                                "Planning time needed (hours):", 
+                                min_value=0.5, 
+                                max_value=2.0, 
+                                value=1.0, 
+                                step=0.5, 
+                                key=f"planning_hours_{task_key}"
+                            )
+                            
+                            create_planning = st.form_submit_button("Create Planning Task")
+                            
+                            if create_planning:
+                                # Add the planning task
+                                new_task = pd.DataFrame({
+                                    'Project': task['Project'] if 'Project' in task else "Planning",
+                                    'Task': planning_task_name,
+                                    'Estimated Time': planning_hours,
+                                    'Due Date': pd.to_datetime(planning_date),
+                                    'Importance': 4,  # High importance
+                                    'Complexity': 2   # Moderate complexity
+                                })
                                 
-                            tasks_df.at[idx, 'Event Type'] = "Fixed Duration"
+                                # Update original task description to show it's pending planning
+                                tasks_df.at[idx, 'Task'] = f"{task_name} [PENDING PLANNING]"
+                                
+                                # Add planning task and save
+                                tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+                                tasks_df.to_csv(tasks_file, index=False)
+                                
+                                st.success(f"Created planning task: {planning_task_name}")
+                                st.session_state['rerun_scheduler'] = True
+                                st.rerun()
+                
+                elif st.session_state[btn_key] in ["breakdown", "project"]:
+                    with breakdown_container.container():
+                        st.info("Let's break this down into smaller, related subtasks")
+                        
+                        with st.form(key=f"breakdown_form_{task_key}"):
+                            num_subtasks = st.slider(
+                                "How many subtasks do you want to create?", 
+                                min_value=2, 
+                                max_value=10, 
+                                value=3, 
+                                key=f"num_subtasks_{task_key}"
+                            )
                             
-                            # Save changes
-                            tasks_df.to_csv(tasks_file, index=False)
+                            # Create input fields for each subtask
+                            subtask_names = []
+                            subtask_hours = []
+                            total_hours = 0
                             
-                            st.success(f"Marked as a fixed duration event. It won't be flagged for breakdown again.")
-                            st.session_state['rerun_scheduler'] = True
-                            st.rerun()
+                            for i in range(num_subtasks):
+                                col1, col2 = st.columns([3, 1])
+                                with col1:
+                                    name = st.text_input(
+                                        f"Subtask {i+1} name:", 
+                                        value=f"{task_name} - Part {i+1}",
+                                        key=f"subtask_name_{task_key}_{i}"
+                                    )
+                                    subtask_names.append(name)
+                                
+                                with col2:
+                                    hours_value = hours / num_subtasks if i == 0 else 0
+                                    hour = st.number_input(
+                                        "Hours:", 
+                                        min_value=0.5, 
+                                        max_value=float(hours), 
+                                        value=hours_value,
+                                        step=0.5,
+                                        key=f"subtask_hours_{task_key}_{i}"
+                                    )
+                                    subtask_hours.append(hour)
+                                    total_hours += hour
+                            
+                            # Show the total hours allocated
+                            remaining = hours - total_hours
+                            st.write(f"Total allocated: **{total_hours}h** | Original estimate: **{hours}h** | Remaining: **{remaining}h**")
+                            
+                            create_subtasks = st.form_submit_button("Create Subtasks")
+                            
+                            if create_subtasks:
+                                # Create new subtask rows
+                                new_tasks = []
+                                for i in range(num_subtasks):
+                                    new_task_row = task.copy()
+                                    new_task_row['Task'] = subtask_names[i]
+                                    new_task_row['Estimated Time'] = subtask_hours[i]
+                                    new_tasks.append(new_task_row)
+                                
+                                # Remove the original task
+                                tasks_df = tasks_df.drop(idx)
+                                
+                                # Add new subtasks
+                                new_tasks_df = pd.DataFrame(new_tasks)
+                                tasks_df = pd.concat([tasks_df, new_tasks_df], ignore_index=True)
+                                
+                                # Save changes
+                                tasks_df.to_csv(tasks_file, index=False)
+                                
+                                st.success(f"Created {num_subtasks} subtasks. Original task has been removed.")
+                                st.session_state['rerun_scheduler'] = True
+                                st.rerun()
+                
+                elif st.session_state[btn_key] == "focus":
+                    with focus_container.container():
+                        st.info("Let's split this into multiple focus sessions while keeping it as a single task")
+                        
+                        with st.form(key=f"focus_form_{task_key}"):
+                            # Determine suggested session length
+                            suggested_length = min(4.0, hours / 2)
+                            
+                            session_length = st.slider(
+                                "How long should each focus session be?", 
+                                min_value=1.0, 
+                                max_value=6.0, 
+                                value=suggested_length,
+                                step=0.5,
+                                key=f"session_length_{task_key}"
+                            )
+                            
+                            num_sessions = math.ceil(hours / session_length)
+                            st.write(f"This will create **{num_sessions} sessions** of **{session_length}h** each.")
+                            
+                            # Option to update the task name
+                            update_name = st.checkbox(
+                                "Update the task name to indicate it's a multi-session task?", 
+                                value=True,
+                                key=f"update_name_{task_key}"
+                            )
+                            
+                            new_name = task_name
+                            if update_name:
+                                new_name = st.text_input(
+                                    "New task name:", 
+                                    value=f"{task_name} [MULTI-SESSION]",
+                                    key=f"new_name_{task_key}"
+                                )
+                            
+                            create_sessions = st.form_submit_button("Create Focus Sessions")
+                            
+                            if create_sessions:
+                                # Update the task
+                                # Update name if requested
+                                if update_name:
+                                    tasks_df.at[idx, 'Task'] = new_name
+                                
+                                # Add metadata about sessions - make sure columns exist
+                                if 'Focus Sessions' not in tasks_df.columns:
+                                    tasks_df['Focus Sessions'] = None
+                                if 'Session Length' not in tasks_df.columns:
+                                    tasks_df['Session Length'] = None
+                                
+                                tasks_df.at[idx, 'Focus Sessions'] = num_sessions
+                                tasks_df.at[idx, 'Session Length'] = session_length
+                                
+                                # Save changes
+                                tasks_df.to_csv(tasks_file, index=False)
+                                
+                                st.success(f"Updated task to use {num_sessions} focus sessions of {session_length}h each.")
+                                st.session_state['rerun_scheduler'] = True
+                                st.rerun()
+                
+                elif st.session_state[btn_key] == "iterative":
+                    with iterative_container.container():
+                        st.info("Let's set up an iterative project structure that will evolve as work progresses")
+                        
+                        with st.form(key=f"iterative_form_{task_key}"):
+                            # Initial exploration session
+                            exploration_hours = st.slider(
+                                "How long should the initial exploration session be?", 
+                                min_value=1.0, 
+                                max_value=4.0, 
+                                value=2.0,
+                                step=0.5,
+                                key=f"exploration_hours_{task_key}"
+                            )
+                            
+                            # Expected sessions
+                            expected_sessions = math.ceil((hours - exploration_hours) / 4) + 1
+                            st.write(f"Based on the total estimate of {hours}h, you'll likely need about {expected_sessions} sessions.")
+                            
+                            # Create a project container
+                            create_project = st.form_submit_button("Create Iterative Project")
+                            
+                            if create_project:
+                                # Copy most attributes from original task
+                                exploration_task = task.copy()
+                                exploration_task['Project'] = f"Iterative: {task_name}"
+                                exploration_task['Task'] = f"Initial exploration: {task_name}"
+                                exploration_task['Estimated Time'] = exploration_hours
+                                
+                                remaining_task = task.copy()
+                                remaining_task['Project'] = f"Iterative: {task_name}"
+                                remaining_task['Task'] = f"{task_name} [REMAINING WORK]"
+                                remaining_task['Estimated Time'] = hours - exploration_hours
+                                
+                                # Convert to DataFrames
+                                exploration_df = pd.DataFrame([exploration_task])
+                                remaining_df = pd.DataFrame([remaining_task])
+                                
+                                # Remove the original task
+                                tasks_df = tasks_df.drop(idx)
+                                
+                                # Add new tasks
+                                tasks_df = pd.concat([tasks_df, exploration_df, remaining_df], ignore_index=True)
+                                
+                                # Save changes
+                                tasks_df.to_csv(tasks_file, index=False)
+                                
+                                st.success(f"Created iterative project structure with initial exploration session and placeholder for remaining work.")
+                                st.session_state['rerun_scheduler'] = True
+                                st.rerun()
+                
+                elif st.session_state[btn_key] == "event":
+                    with event_container.container():
+                        st.info("This will mark the task as a fixed-duration event that shouldn't be broken down")
+                        
+                        with st.form(key=f"event_form_{task_key}"):
+                            update_name = st.checkbox(
+                                "Update the task name to indicate it's a fixed event?", 
+                                value=True,
+                                key=f"update_name_{task_key}"
+                            )
+                            
+                            new_name = task_name
+                            if update_name:
+                                new_name = st.text_input(
+                                    "New task name:", 
+                                    value=f"{task_name} [FIXED EVENT]",
+                                    key=f"new_name_{task_key}"
+                                )
+                            
+                            mark_as_event = st.form_submit_button("Mark as Fixed Event")
+                            
+                            if mark_as_event:
+                                # Update the task
+                                # Update name if requested
+                                if update_name:
+                                    tasks_df.at[idx, 'Task'] = new_name
+                                
+                                # Add metadata about event type
+                                if 'Event Type' not in tasks_df.columns:
+                                    tasks_df['Event Type'] = None
+                                    
+                                tasks_df.at[idx, 'Event Type'] = "Fixed Duration"
+                                
+                                # Save changes
+                                tasks_df.to_csv(tasks_file, index=False)
+                                
+                                st.success(f"Marked as a fixed duration event. It won't be flagged for breakdown again.")
+                                st.session_state['rerun_scheduler'] = True
+                                st.rerun()
         
         # Handle other warnings (scheduling issues, etc.)
         if warnings:
