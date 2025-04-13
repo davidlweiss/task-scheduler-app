@@ -106,35 +106,37 @@ if st.button("Run Scheduler"):
     if warnings:
         st.subheader("Warnings & Handle Options")
         for warning in warnings:
-            task_name = warning.split("HANDLE: ")[1].split(" (")[0]
             st.warning(warning)
 
-            with st.expander(f"Handle This Task for {task_name}"):
-                action = st.radio(
-                    "Choose an action:",
-                    [
-                        'Add More Free Time (manual)',
-                        'Reduce Estimated Time',
-                        'Move Due Date',
-                        'Accept Partial Completion & Create Follow-up Task',
-                        'Deprioritize Other Tasks',
-                        'Skip for Now'
-                    ],
-                    key=f"action_{task_name}"
-                )
+            if "HANDLE: " in warning:
+                task_name = warning.split("HANDLE: ")[1].split(" (")[0]
 
-                if action == 'Reduce Estimated Time':
-                    new_time = st.number_input(
-                        "Enter new estimated time (hours):",
-                        min_value=0.5,
-                        step=0.5,
-                        key=f"new_time_{task_name}"
+                with st.expander(f"Handle This Task for {task_name}"):
+                    action = st.radio(
+                        "Choose an action:",
+                        [
+                            'Add More Free Time (manual)',
+                            'Reduce Estimated Time',
+                            'Move Due Date',
+                            'Accept Partial Completion & Create Follow-up Task',
+                            'Deprioritize Other Tasks',
+                            'Skip for Now'
+                        ],
+                        key=f"action_{task_name}"
                     )
 
-                if action == 'Move Due Date':
-                    new_due_date = st.date_input(
-                        "Pick new due date:",
-                        key=f"new_due_date_{task_name}"
-                    )
+                    if action == 'Reduce Estimated Time':
+                        new_time = st.number_input(
+                            "Enter new estimated time (hours):",
+                            min_value=0.5,
+                            step=0.5,
+                            key=f"new_time_{task_name}"
+                        )
 
-                st.button("Confirm and Apply Action", key=f"confirm_{task_name}")
+                    if action == 'Move Due Date':
+                        new_due_date = st.date_input(
+                            "Pick new due date:",
+                            key=f"new_due_date_{task_name}"
+                        )
+
+                    st.button("Confirm and Apply Action", key=f"confirm_{task_name}")
