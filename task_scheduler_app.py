@@ -55,13 +55,37 @@ else:
     tasks_df = edited_tasks_df  # Update the main dataframe with edits
 
 st.subheader("Edit Free Time Windows")
+
+# Add Sort Order column if it doesn't exist
+if 'Sort Order' not in free_time_df.columns:
+    free_time_df['Sort Order'] = range(1, len(free_time_df) + 1)
+
+# Create column configuration
+column_config = {
+    "Sort Order": st.column_config.NumberColumn(
+        "Sort Order",
+        help="Change numbers to reorder rows (lower numbers come first)",
+        min_value=1,
+        step=1,
+        format="%d"
+    ),
+    "Date": st.column_config.DateColumn("Date", format="MM/DD/YYYY"),
+    "Available Hours": st.column_config.NumberColumn("Available Hours", min_value=0, step=0.5)
+}
+
 edited_free_time_df = st.data_editor(
     free_time_df,
     num_rows="dynamic",
     use_container_width=True,
     disabled=False,
-    key="free_time_editor"
+    key="free_time_editor",
+    column_config=column_config
 )
+
+# Sort by the Sort Order column
+if not edited_free_time_df.empty:
+    edited_free_time_df = edited_free_time_df.sort_values(by='Sort Order')
+
 # Save any changes to the free time
 edited_free_time_df.to_csv(free_time_file, index=False)
 free_time_df = edited_free_time_df  # Update the main dataframe with edits
