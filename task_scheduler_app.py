@@ -296,8 +296,154 @@ if st.button("Run Scheduler") or 'rerun_scheduler' in st.session_state:
 
         if warnings:
             st.subheader("Warnings & Handle Options")
+            
             for warning in warnings:
-                st.warning(warning)
+                if warning.startswith("HANDLE:"):
+                    # Extract task details from the warning
+                    task_info = warning.replace("HANDLE:", "").strip()
+                    task_name = task_info.split("(Due:")[0].strip()
+                    
+                    # Display the warning in a yellow box
+                    st.warning(warning)
+                    
+                    # Create a resolution box with options
+                    with st.expander("Resolve this warning"):
+                        resolution_option = st.radio(
+                            "How would you like to resolve this issue?",
+                            [
+                                "Add more free time before the due date",
+                                "Reduce the estimated time for this task",
+                                "Move other tasks to make room for this one",
+                                "Adjust the due date for this task",
+                                "Mark as acknowledged (will handle manually)"
+                            ],
+                            key=f"resolution_{task_name.replace(' ', '_')}"
+                        )
+                        
+                        if resolution_option == "Add more free time before the due date":
+                            # Find the due date for this task
+                            task_row = tasks_df[tasks_df['Task'] == task_name]
+                            if not task_row.empty:
+                                due_date = task_row['Due Date'].iloc[0]
+                                if pd.notnull(due_date):
+                                    # Format for display
+                                    due_date_str = pd.to_datetime(due_date).strftime('%Y-%m-%d')
+                                    
+                                    st.write(f"Add free time before {due_date_str}:")
+                                    
+                                    # Find how much more time is needed
+                                    time_needed = 0
+                                    if "needs" in task_info and "scheduled" in task_info:
+                                        try:
+                                            total_needed = float(task_info.split("needs ")[1].split("h")[0])
+                                            scheduled = float(task_info.split("only ")[1].split("h")[0])
+                                            time_needed = total_needed - scheduled
+                                        except:
+                                            time_needed = 1.0  # Default if parsing fails
+                                    
+                                    # Create quick add options
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        add_date = st.date_input("Date to add time", 
+                                                              value=pd.to_datetime(due_date) - pd.Timedelta(days=1),
+                                                              max_value=pd.to_datetime(due_date),
+                                                              key=f"add_date_{task_name.replace(' ', '_')}")
+                                    with col2:
+                                        add_hours = st.number_input("Hours to add", 
+                                                                min_value=0.5, 
+                                                                value=time_needed if time_needed > 0 else 1.0,
+                                                                step=0.5,
+                                                                key=f"add_hours_{task_name.replace(' ', '_')}")
+                                    
+                                    if st.button("Add This Time", key=f"add_time_{task_name.replace(' ', '_')}"):
+                                        pd_date = pd.to_datetime(add_date)
+                                        
+                                        # Check if date already exists in free_time_df
+                                        if not free_time_df.empty and pd_date in free_time_df['Date'].values:
+                                            # Add to existing date
+                                            idx = free_time_df[free_time_df['Date'] == pd_date].index[0]
+                                            free_time_df.at[idx, 'Available Hours'] += add_hours
+                                        else:
+                                            # Add new date
+                                            new_row = pd.DataFrame({'Date': [pd_date], 'Available Hours': [add_hours]})
+                                            free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
+                                        
+                                        # Save changes
+                                        free_time_df.to_csv(free_time_file, index=False)
+                                        st.session_state['rerun_scheduler'] = True
+                                        st.success(f"Added {add_hours} hours on {add_date}. Rescheduling...")
+                                        st.rerun()
+                        
+                        elif resolution_option == "Reduce the estimated time for this task":
+                            # Find the task and its current estimate
+                            task_row = tasks_df[tasks_df['Task'] == task_name]
+                            if not task_row.empty:
+                                current_estimate = task_row['Estimated Time'].iloc[0]
+                                
+                                # Find how much is currently scheduled
+                                scheduled_time = 0
+                                if "only" in task_info and "scheduled" in task_info:
+                                    try:
+                                        scheduled_time = float(task_info.split("only ")[1].split("h")[0])
+                                    except:
+                                        scheduled_time = 0
+                                
+                                # Get new estimate
+                                new_estimate = st.number_input(
+                                    f"Current estimate: {current_estimate}h. New estimate:",
+                                    min_value=scheduled_time,
+                                    max_value=current_estimate,
+                                    value=scheduled_time,
+                                    step=0.5,
+                                    key=f"new_estimate_{task_name.replace(' ', '_')}"
+                                )
+                                
+                                if st.button("Update Estimate", key=f"update_estimate_{task_name.replace(' ', '_')}"):
+                                    # Update the task's estimated time
+                                    idx = task_row.index[0]
+                                    tasks_df.at[idx, 'Estimated Time'] = new_estimate
+                                    
+                                    # Save changes
+                                    tasks_df.to_csv(tasks_file, index=False)
+                                    st.session_state['rerun_scheduler'] = True
+                                    st.success(f"Updated estimate to {new_estimate}h. Rescheduling...")
+                                    st.rerun()
+                        
+                        elif resolution_option == "Adjust the due date for this task":
+                            # Find the task and its current due date
+                            task_row = tasks_df[tasks_df['Task'] == task_name]
+                            if not task_row.empty:
+                                current_due_date = task_row['Due Date'].iloc[0]
+                                if pd.notnull(current_due_date):
+                                    current_due_date = pd.to_datetime(current_due_date)
+                                    
+                                    # Get new due date
+                                    new_due_date = st.date_input(
+                                        f"Current due date: {current_due_date.strftime('%Y-%m-%d')}. New due date:",
+                                        value=current_due_date + pd.Timedelta(days=1),
+                                        min_value=current_due_date,
+                                        key=f"new_due_date_{task_name.replace(' ', '_')}"
+                                    )
+                                    
+                                    if st.button("Update Due Date", key=f"update_due_date_{task_name.replace(' ', '_')}"):
+                                        # Update the task's due date
+                                        idx = task_row.index[0]
+                                        tasks_df.at[idx, 'Due Date'] = pd.to_datetime(new_due_date)
+                                        
+                                        # Save changes
+                                        tasks_df.to_csv(tasks_file, index=False)
+                                        st.session_state['rerun_scheduler'] = True
+                                        st.success(f"Updated due date to {new_due_date}. Rescheduling...")
+                                        st.rerun()
+                        
+                        elif resolution_option == "Mark as acknowledged (will handle manually)":
+                            if st.button("Acknowledge", key=f"acknowledge_{task_name.replace(' ', '_')}"):
+                                # Remove this warning from our list by not adding it to a new warnings list
+                                st.success("Warning acknowledged. You'll need to handle this manually.")
+                                # We don't need to rerun or make any changes to the data
+                else:
+                    # Display other warnings (not HANDLE: warnings)
+                    st.warning(warning)
 
     if 'rerun_scheduler' in st.session_state:
         del st.session_state['rerun_scheduler']
