@@ -7,6 +7,7 @@ from datetime import datetime
 # File paths
 tasks_file = 'tasks.csv'
 free_time_file = 'free_time.csv'
+backlog_file = 'backlog.csv'  # New file for backlog items
 
 # Initialize session state for wizard at the very beginning
 if 'wizard_mode' not in st.session_state:
@@ -19,6 +20,12 @@ if 'wizard_task' not in st.session_state:
     st.session_state.wizard_task = None
 if 'wizard_approach' not in st.session_state:
     st.session_state.wizard_approach = None
+    
+# Initialize session state for backlog conversion
+if 'converting_item' not in st.session_state:
+    st.session_state.converting_item = None
+if 'converting_idx' not in st.session_state:
+    st.session_state.converting_idx = None
 
 # For debugging
 # st.write(f"DEBUG: Wizard mode = {st.session_state.wizard_mode}")
@@ -60,6 +67,7 @@ def load_data(file_path, columns):
 # Load data
 tasks_df = load_data(tasks_file, ['Project', 'Task', 'Estimated Time', 'Due Date', 'Importance', 'Complexity'])
 free_time_df = load_data(free_time_file, ['Date', 'Available Hours'])
+backlog_df = load_data(backlog_file, ['Idea', 'Category', 'Description', 'Creation Date', 'Status'])
 
 # TOP LEVEL UI DECISION - Check if we're in wizard mode first, before rendering any UI
 if st.session_state.wizard_mode:
@@ -539,7 +547,7 @@ else:
     st.title("Dynamic Task Scheduler V8")
     
     # Create a tab structure for the main app
-    tab1, tab2, tab3 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler", "Idea Backlog"])
     
     # Tab 1: Manage Tasks
     with tab1:
@@ -727,7 +735,7 @@ else:
             if not tasks_df.empty:
                 scheduled_tasks = []  # Start with an empty list - clear previous scheduling
                 warnings = []
-                unallocated_tasks = []  # New list to track tasks with insufficient allocation
+                unallocated_tasks = []  # List to track tasks with insufficient allocation
                 
                 today = pd.to_datetime(datetime.today().date())
                 tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date'], errors='coerce')
@@ -774,14 +782,14 @@ else:
                             working_free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
                             task_time_remaining -= allocated_time
                     
-                    # If leftover => track unallocated tasks and show warning
+                    # Track unallocated tasks
                     if pd.notnull(due_date) and task_time_remaining > 0:
                         warnings.append(
                             f"HANDLE: {task_name} (Due: {due_date.date()}) "
                             f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
                         )
                         
-                        # Track the unallocated task with details for resolution options
+                        # Track the unallocated task with details
                         unallocated_tasks.append({
                             'Task': task_name,
                             'Task Index': idx,  # Store the index for later reference
@@ -828,7 +836,7 @@ else:
                 else:
                     st.write("No tasks could be scheduled with the current free time availability.")
                 
-                # NEW SECTION: Display and handle unallocated tasks
+                # NEW SECTION: Handle tasks with insufficient hours
                 if unallocated_tasks:
                     st.subheader("Tasks with Insufficient Hours")
                     
@@ -837,9 +845,6 @@ else:
                     st.dataframe(unallocated_df[['Task', 'Due Date', 'Total Hours', 'Allocated Hours', 'Unallocated Hours']])
                     
                     # Let user select a task to resolve
-                    if 'selected_unallocated_task' not in st.session_state:
-                        st.session_state.selected_unallocated_task = None
-                    
                     task_options = [task['Task'] for task in unallocated_tasks]
                     selected_task_name = st.selectbox("Select a task to resolve:", task_options)
                     
@@ -847,8 +852,6 @@ else:
                     selected_task = next((task for task in unallocated_tasks if task['Task'] == selected_task_name), None)
                     
                     if selected_task:
-                        st.session_state.selected_unallocated_task = selected_task
-                        
                         st.markdown(f"### Resolve scheduling for: {selected_task['Task']}")
                         st.markdown(f"**Due date:** {selected_task['Due Date'].date()}")
                         st.markdown(f"**Current allocation:** {selected_task['Allocated Hours']} of {selected_task['Total Hours']} hours")
@@ -1000,3 +1003,150 @@ else:
             
             if 'rerun_scheduler' in st.session_state:
                 del st.session_state['rerun_scheduler']
+    
+    # Tab 4: Idea Backlog - NEW TAB
+    with tab4:
+        st.header("Idea Backlog")
+        
+        # Add form for new backlog items
+        with st.form("add_backlog_item"):
+            st.subheader("Add New Idea")
+            idea_name = st.text_input("Idea Name")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                category = st.selectbox(
+                    "Category", 
+                    options=["Work", "Personal", "Learning", "Project", "Other"]
+                )
+            with col2:
+                status = st.selectbox(
+                    "Status",
+                    options=["New", "Evaluating", "Someday/Maybe"]
+                )
+                
+            description = st.text_area("Description")
+            submit_button = st.form_submit_button("Add to Backlog")
+            
+        if submit_button and idea_name:
+            # Add new item to backlog
+            new_item = pd.DataFrame({
+                'Idea': [idea_name],
+                'Category': [category],
+                'Description': [description],
+                'Creation Date': [pd.Timestamp.now()],
+                'Status': [status]
+            })
+            
+            backlog_df = pd.concat([backlog_df, new_item], ignore_index=True)
+            backlog_df.to_csv(backlog_file, index=False)
+            st.success(f"Added '{idea_name}' to backlog!")
+        
+        # Handle conversion of backlog items to tasks
+        if st.session_state.converting_item is not None:
+            item = st.session_state.converting_item
+            idx = st.session_state.converting_idx
+            
+            st.subheader(f"Convert '{item['Idea']}' to Task")
+            
+            with st.form("convert_to_task"):
+                task_name = st.text_input("Task Name", value=item['Idea'])
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    project = st.text_input("Project", value=item['Category'])
+                with col2:
+                    estimated_time = st.number_input("Estimated Time (hours)", min_value=0.5, step=0.5, value=1.0)
+                
+                col3, col4 = st.columns(2)
+                with col3:
+                    due_date = st.date_input("Due Date", value=pd.Timestamp.now() + pd.Timedelta(days=7))
+                with col4:
+                    importance = st.slider("Importance", min_value=1, max_value=5, value=3)
+                
+                complexity = st.slider("Complexity", min_value=1, max_value=5, value=3)
+                
+                col5, col6 = st.columns([1, 1])
+                with col5:
+                    cancel = st.form_submit_button("Cancel")
+                with col6:
+                    submit = st.form_submit_button("Create Task")
+                
+                if cancel:
+                    st.session_state.converting_item = None
+                    st.session_state.converting_idx = None
+                    st.rerun()
+                
+                if submit:
+                    # Create the new task
+                    new_task = pd.DataFrame({
+                        'Project': [project],
+                        'Task': [task_name],
+                        'Estimated Time': [estimated_time],
+                        'Due Date': [pd.to_datetime(due_date)],
+                        'Importance': [importance],
+                        'Complexity': [complexity]
+                    })
+                    
+                    # Add to tasks and remove from backlog
+                    tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+                    tasks_df.to_csv(tasks_file, index=False)
+                    
+                    # Remove from backlog
+                    backlog_df = backlog_df.drop(idx)
+                    backlog_df.to_csv(backlog_file, index=False)
+                    
+                    st.success(f"Successfully converted '{task_name}' to a task!")
+                    st.session_state.converting_item = None
+                    st.session_state.converting_idx = None
+                    st.rerun()
+        
+        # Display and manage existing backlog items
+        if not backlog_df.empty:
+            st.subheader("Current Backlog")
+            
+            # Add filtering options
+            filter_col1, filter_col2 = st.columns(2)
+            with filter_col1:
+                filter_category = st.multiselect(
+                    "Filter by Category",
+                    options=backlog_df['Category'].unique()
+                )
+            with filter_col2:
+                filter_status = st.multiselect(
+                    "Filter by Status",
+                    options=backlog_df['Status'].unique()
+                )
+            
+            # Apply filters
+            filtered_df = backlog_df
+            if filter_category:
+                filtered_df = filtered_df[filtered_df['Category'].isin(filter_category)]
+            if filter_status:
+                filtered_df = filtered_df[filtered_df['Status'].isin(filter_status)]
+            
+            # Display the backlog items with actions
+            for idx, item in filtered_df.iterrows():
+                with st.expander(f"{item['Idea']} ({item['Category']})"):
+                    cols = st.columns([3, 1, 1])
+                    
+                    with cols[0]:
+                        st.markdown(f"**Description:** {item['Description']}")
+                        st.markdown(f"**Created:** {pd.to_datetime(item['Creation Date']).strftime('%Y-%m-%d')}")
+                        st.markdown(f"**Status:** {item['Status']}")
+                    
+                    with cols[1]:
+                        if st.button("Convert to Task", key=f"convert_{idx}"):
+                            # Store the item for conversion
+                            st.session_state.converting_item = item
+                            st.session_state.converting_idx = idx
+                            st.rerun()
+                    
+                    with cols[2]:
+                        if st.button("Remove", key=f"remove_{idx}"):
+                            backlog_df = backlog_df.drop(idx)
+                            backlog_df.to_csv(backlog_file, index=False)
+                            st.success(f"Removed '{item['Idea']}' from backlog.")
+                            st.rerun()
+        else:
+            st.info("Your backlog is empty. Add ideas using the form above.")
