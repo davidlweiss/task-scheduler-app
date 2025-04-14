@@ -727,6 +727,7 @@ else:
             if not tasks_df.empty:
                 scheduled_tasks = []  # Start with an empty list - clear previous scheduling
                 warnings = []
+                unallocated_tasks = []  # New list to track tasks with insufficient allocation
                 
                 today = pd.to_datetime(datetime.today().date())
                 tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date'], errors='coerce')
@@ -773,12 +774,22 @@ else:
                             working_free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
                             task_time_remaining -= allocated_time
                     
-                    # If leftover => user might want "Needs Attention" or partial?
+                    # If leftover => track unallocated tasks and show warning
                     if pd.notnull(due_date) and task_time_remaining > 0:
                         warnings.append(
                             f"HANDLE: {task_name} (Due: {due_date.date()}) "
                             f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
                         )
+                        
+                        # Track the unallocated task with details for resolution options
+                        unallocated_tasks.append({
+                            'Task': task_name,
+                            'Task Index': idx,  # Store the index for later reference
+                            'Due Date': due_date,
+                            'Total Hours': task['Estimated Time'],
+                            'Allocated Hours': task['Estimated Time'] - task_time_remaining,
+                            'Unallocated Hours': task_time_remaining
+                        })
                 
                 scheduled_df = pd.DataFrame(scheduled_tasks)
                 
@@ -816,6 +827,147 @@ else:
                         st.write("No scheduled tasks yet.")
                 else:
                     st.write("No tasks could be scheduled with the current free time availability.")
+                
+                # NEW SECTION: Display and handle unallocated tasks
+                if unallocated_tasks:
+                    st.subheader("Tasks with Insufficient Hours")
+                    
+                    # Create a dataframe of unallocated tasks
+                    unallocated_df = pd.DataFrame(unallocated_tasks)
+                    st.dataframe(unallocated_df[['Task', 'Due Date', 'Total Hours', 'Allocated Hours', 'Unallocated Hours']])
+                    
+                    # Let user select a task to resolve
+                    if 'selected_unallocated_task' not in st.session_state:
+                        st.session_state.selected_unallocated_task = None
+                    
+                    task_options = [task['Task'] for task in unallocated_tasks]
+                    selected_task_name = st.selectbox("Select a task to resolve:", task_options)
+                    
+                    # Find the selected task details
+                    selected_task = next((task for task in unallocated_tasks if task['Task'] == selected_task_name), None)
+                    
+                    if selected_task:
+                        st.session_state.selected_unallocated_task = selected_task
+                        
+                        st.markdown(f"### Resolve scheduling for: {selected_task['Task']}")
+                        st.markdown(f"**Due date:** {selected_task['Due Date'].date()}")
+                        st.markdown(f"**Current allocation:** {selected_task['Allocated Hours']} of {selected_task['Total Hours']} hours")
+                        st.markdown(f"**Unallocated hours:** {selected_task['Unallocated Hours']} hours")
+                        
+                        # Show resolution options
+                        resolution_options = [
+                            "Reduce task hours estimate",
+                            "Add more free time",
+                            "Break down into subtasks",
+                            "Extend the due date",
+                            "Mark as partially completed"
+                        ]
+                        
+                        resolution_choice = st.radio("How would you like to resolve this?", resolution_options)
+                        
+                        # Handle each resolution option
+                        if resolution_choice == "Reduce task hours estimate":
+                            new_estimate = st.number_input(
+                                "New total hour estimate:", 
+                                min_value=selected_task['Allocated Hours'], 
+                                max_value=selected_task['Total Hours'], 
+                                value=selected_task['Allocated Hours'],
+                                step=0.5
+                            )
+                            
+                            if st.button("Update Task Estimate"):
+                                # Update the task's estimated time
+                                task_idx = selected_task['Task Index']
+                                tasks_df.at[task_idx, 'Estimated Time'] = new_estimate
+                                tasks_df.to_csv(tasks_file, index=False)
+                                st.success(f"Updated estimate for '{selected_task['Task']}' to {new_estimate} hours.")
+                                st.session_state.rerun_scheduler = True
+                                st.rerun()
+                        
+                        elif resolution_choice == "Add more free time":
+                            # Calculate days until due
+                            today = pd.Timestamp(datetime.today().date())
+                            days_until_due = (selected_task['Due Date'] - today).days
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                days_to_add = st.slider("Days to add free time:", 1, max(1, days_until_due), 1)
+                            with col2:
+                                hours_per_day = st.number_input("Hours per day:", min_value=0.5, value=selected_task['Unallocated Hours']/days_to_add, step=0.5)
+                            
+                            dates_to_add = []
+                            for i in range(days_to_add):
+                                date = today + pd.Timedelta(days=i)
+                                if date <= selected_task['Due Date']:
+                                    dates_to_add.append(date)
+                            
+                            st.write(f"Will add {hours_per_day} hours to the following dates:")
+                            for date in dates_to_add:
+                                st.write(f"- {date.strftime('%A, %B %d, %Y')}")
+                            
+                            if st.button("Add Free Time"):
+                                for date in dates_to_add:
+                                    # Check if date already exists in free_time_df
+                                    if date in free_time_df['Date'].values:
+                                        idx = free_time_df[free_time_df['Date'] == date].index[0]
+                                        free_time_df.at[idx, 'Available Hours'] += hours_per_day
+                                    else:
+                                        new_row = pd.DataFrame({'Date': [date], 'Available Hours': [hours_per_day]})
+                                        free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
+                                
+                                free_time_df.to_csv(free_time_file, index=False)
+                                st.success(f"Added {hours_per_day * len(dates_to_add)} hours of free time across {len(dates_to_add)} days.")
+                                st.session_state.rerun_scheduler = True
+                                st.rerun()
+                        
+                        elif resolution_choice == "Break down into subtasks":
+                            if st.button("Start Task Breakdown Wizard"):
+                                # Store the task index to break down in the wizard
+                                st.session_state.wizard_task_idx = selected_task['Task Index']
+                                st.session_state.wizard_task = tasks_df.loc[selected_task['Task Index']].to_dict()
+                                start_wizard()
+                                st.rerun()
+                        
+                        elif resolution_choice == "Extend the due date":
+                            new_due_date = st.date_input(
+                                "New due date:", 
+                                value=selected_task['Due Date'], 
+                                min_value=selected_task['Due Date'].date()
+                            )
+                            
+                            if st.button("Update Due Date"):
+                                task_idx = selected_task['Task Index']
+                                tasks_df.at[task_idx, 'Due Date'] = pd.to_datetime(new_due_date)
+                                tasks_df.to_csv(tasks_file, index=False)
+                                st.success(f"Updated due date for '{selected_task['Task']}' to {new_due_date}.")
+                                st.session_state.rerun_scheduler = True
+                                st.rerun()
+                        
+                        elif resolution_choice == "Mark as partially completed":
+                            progress_percentage = st.slider(
+                                "What percentage of this task is already completed?", 
+                                min_value=0, 
+                                max_value=100, 
+                                value=int((selected_task['Allocated Hours'] / selected_task['Total Hours']) * 100)
+                            )
+                            
+                            remaining_hours = selected_task['Total Hours'] * (1 - progress_percentage / 100)
+                            
+                            st.write(f"This will update the task to {remaining_hours:.1f} hours remaining.")
+                            
+                            if st.button("Update Task Progress"):
+                                task_idx = selected_task['Task Index']
+                                tasks_df.at[task_idx, 'Estimated Time'] = remaining_hours
+                                
+                                # Optionally add "[IN PROGRESS]" tag to task name
+                                current_task_name = tasks_df.at[task_idx, 'Task']
+                                if not "[IN PROGRESS]" in current_task_name:
+                                    tasks_df.at[task_idx, 'Task'] = f"{current_task_name} [IN PROGRESS {progress_percentage}%]"
+                                
+                                tasks_df.to_csv(tasks_file, index=False)
+                                st.success(f"Updated progress for '{selected_task['Task']}' to {progress_percentage}% complete.")
+                                st.session_state.rerun_scheduler = True
+                                st.rerun()
                 
                 # Display large tasks section if there are any
                 if large_tasks:
