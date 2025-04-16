@@ -4,11 +4,16 @@ from components.free_time_form import show_free_time_manager
 from components.scheduler import run_scheduler
 from components.backlog_form import show_backlog_manager
 from components.wizard import run_wizard
+from components.db_manager import show_db_manager
 from utils.session_state import initialize_session_state
+from utils.db_utils import initialize_database
 
 def main():
     """Main entry point for the Task Scheduler application."""
     st.title("Dynamic Task Scheduler V8")
+    
+    # Initialize database (ensures tables exist)
+    initialize_database()
     
     # Initialize session state
     initialize_session_state()
@@ -18,7 +23,7 @@ def main():
         run_wizard()
     else:
         # Create tabs for the main app interface
-        tab1, tab2, tab3, tab4 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler", "Idea Backlog"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler", "Idea Backlog", "Database"])
         
         with tab1:
             show_task_manager()
@@ -31,6 +36,9 @@ def main():
         
         with tab4:
             show_backlog_manager()
+            
+        with tab5:
+            show_db_manager()
 
 if __name__ == "__main__":
     main()
