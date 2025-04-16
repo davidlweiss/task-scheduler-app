@@ -248,7 +248,8 @@ def schedule_tasks(tasks_df, working_free_time_df):
 
 def display_scheduling_results(scheduled_tasks, daily_summary):
     """
-    Display the results of the scheduling algorithm.
+    Display the results of the scheduling algorithm with temporary editing capabilities.
+    Any edits will be overwritten when the scheduler runs again.
     """
     scheduled_df = pd.DataFrame(scheduled_tasks)
     
@@ -269,7 +270,18 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
         daily_scheduled['Date'] = pd.to_datetime(daily_scheduled['Date'])
         daily_summary = daily_summary.merge(daily_scheduled, on='Date', how='left').fillna(0)
         
-        st.dataframe(daily_summary)
+        # Display the daily summary as a data editor
+        st.subheader("Daily Capacity Summary (Editable)")
+        st.data_editor(
+            daily_summary,
+            use_container_width=True,
+            key="daily_summary_editor",
+            column_config={
+                "Date": st.column_config.DateColumn("Date"),
+                "Total Available": st.column_config.NumberColumn("Available Hours"),
+                "Total Scheduled": st.column_config.NumberColumn("Scheduled Hours")
+            }
+        )
         
         # Create task-by-date pivot table
         pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
@@ -282,7 +294,18 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
             if ordered_cols:  # Check if any columns exist
                 pivot_df = pivot_df[ordered_cols]
             
-            st.dataframe(pivot_df)
+            # Display the pivot table as an editable data editor
+            st.subheader("Task Schedule (Editable)")
+            st.data_editor(
+                pivot_df,
+                use_container_width=True,
+                key="task_schedule_editor",
+                column_config={col: st.column_config.NumberColumn(col.strftime("%a %b %d") if isinstance(col, pd.Timestamp) else col) 
+                              for col in pivot_df.columns}
+            )
+            
+            # Add a note about changes being temporary
+            st.info("Note: Any edits made to these tables are temporary and will be overwritten when you run the scheduler again.")
         else:
             st.write("No scheduled tasks yet.")
     else:
