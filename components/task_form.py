@@ -15,15 +15,11 @@ def show_task_manager():
     if 'Due Date' in tasks_df.columns and not tasks_df.empty:
         tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date']).dt.date
     
-    # Remove the 'id' column if it exists
-    if 'id' in tasks_df.columns:
-        tasks_df = tasks_df.drop('id', axis=1)
-    
     # Provide view-only mode for sorting
     if st.checkbox("Enable Sorting Mode (View Only)"):
         st.dataframe(tasks_df, use_container_width=True, hide_index=True)
     else:
-        # Use data editor with hidden index and no id column
+        # Use data editor for full editing capabilities
         edited_tasks_df = st.data_editor(
             tasks_df,
             num_rows="dynamic",
@@ -52,5 +48,5 @@ def show_task_manager():
             
             # Return the updated dataframe for any subsequent operations
             return edited_tasks_df
-            
+    
     return tasks_df
