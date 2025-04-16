@@ -1,5 +1,6 @@
 import streamlit as st
 from models.task import load_tasks, save_tasks
+import pandas as pd
 
 def show_task_manager():
     """
@@ -10,19 +11,35 @@ def show_task_manager():
     # Load current tasks
     tasks_df = load_tasks()
     
+    # Convert 'Due Date' to date only (without time) if it exists
+    if 'Due Date' in tasks_df.columns and not tasks_df.empty:
+        tasks_df['Due Date'] = pd.to_datetime(tasks_df['Due Date']).dt.date
+    
     # Provide view-only mode for sorting
     if st.checkbox("Enable Sorting Mode (View Only)"):
         st.dataframe(tasks_df, use_container_width=True)
     else:
-        # Use data editor for full editing capabilities
+        # Use data editor for full editing capabilities with date configuration
         edited_tasks_df = st.data_editor(
             tasks_df,
             num_rows="dynamic",
             use_container_width=True,
-            column_config={"Task": st.column_config.Column(width='large')},
+            column_config={
+                "Task": st.column_config.Column(width='large'),
+                "Due Date": st.column_config.DateColumn(
+                    "Due Date",
+                    min_value=pd.Timestamp.now().date(),
+                    format="YYYY-MM-DD",
+                    step=1,
+                ),
+            },
             disabled=False,
             key="task_editor"
         )
+        
+        # Convert dates back to datetime for storage (as the rest of the app expects datetime)
+        if 'Due Date' in edited_tasks_df.columns and not edited_tasks_df.empty:
+            edited_tasks_df['Due Date'] = pd.to_datetime(edited_tasks_df['Due Date'])
         
         # Save changes when button is pressed
         if st.button("Save Tasks"):
