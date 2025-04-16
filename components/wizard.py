@@ -104,6 +104,7 @@ def wizard_step_one():
 def wizard_step_two():
     """
     Step 2: Choose a breakdown approach.
+    FIXED: Use a single radio group rather than multiple separate radios
     """
     st.subheader("Step 2: Choose a Breakdown Approach")
     
@@ -134,14 +135,19 @@ def wizard_step_two():
             "Fixed Duration Event - Mark as event that shouldn't be broken down"
         ]
     
-    # Use radio buttons for approach selection
-    approach_index = 0
-    for i, approach in enumerate(approach_options):
-        if st.radio("", [approach], key=f"approach_{i}", label_visibility="collapsed"):
-            approach_index = i
+    # Use a single radio button group for approach selection
+    # Initialize the selection to the first option if not set
+    if 'selected_approach' not in st.session_state:
+        st.session_state.selected_approach = approach_options[0]
+    
+    selected_approach = st.radio(
+        "Select an approach:",
+        approach_options,
+        key="approach_selection"
+    )
     
     # Store the selected approach
-    st.session_state.wizard_approach = approach_options[approach_index]
+    st.session_state.wizard_approach = selected_approach
     
     # Navigation buttons
     cols = st.columns([1, 1, 1])
@@ -499,6 +505,61 @@ def handle_iterative_project(idx, task, task_name, hours):
             
             # Show success message
             st.success("Created iterative project structure with initial exploration session and placeholder for remaining work.")
+            
+            # Auto-exit
+            exit_wizard()
+            st.rerun()
+
+def handle_fixed_event(idx, task, task_name, hours):
+    """
+    Handle the 'Fixed Duration Event' approach.
+    """
+    with st.form(key="fixed_form"):
+        st.write("Mark this task as a fixed duration event that shouldn't be broken down.")
+        
+        # Option to update the task name
+        update_name = st.checkbox(
+            "Update the task name to indicate it's a fixed event?", 
+            value=True
+        )
+        
+        new_name = task_name
+        if update_name:
+            new_name = st.text_input(
+                "New task name:", 
+                value=f"{task_name} [FIXED EVENT]"
+            )
+        
+        # Form buttons
+        cols = st.columns([1, 1, 1])
+        with cols[0]:
+            previous_step = st.form_submit_button("Previous")
+        with cols[1]:
+            cancel = st.form_submit_button("Cancel")
+        with cols[2]:
+            update_task = st.form_submit_button("Update Task")
+        
+        if previous_step:
+            prev_wizard_step()
+            st.rerun()
+        
+        if cancel:
+            exit_wizard()
+            st.rerun()
+        
+        if update_task:
+            # Load tasks to ensure we're working with the latest data
+            tasks_df = load_tasks()
+            
+            # Update name if requested
+            if update_name:
+                tasks_df.at[idx, 'Task'] = new_name
+            
+            # Save changes
+            save_tasks(tasks_df)
+            
+            # Show success message
+            st.success(f"Updated task as a fixed duration event.")
             
             # Auto-exit
             exit_wizard()
