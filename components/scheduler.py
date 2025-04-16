@@ -110,11 +110,20 @@ def create_daily_summary(free_time_df):
 def schedule_tasks(tasks_df, working_free_time_df):
     """
     Schedule tasks based on priority and available time.
-    Handle focus sessions appropriately, with extremely robust error handling.
     """
     scheduled_tasks = []
     warnings = []
     unallocated_tasks = []
+    
+    # Check if working_free_time_df is properly formatted
+    if working_free_time_df.empty:
+        warnings.append("No free time windows available for scheduling")
+        return scheduled_tasks, warnings, unallocated_tasks
+    
+    # Ensure 'Available Hours' column exists
+    if 'Available Hours' not in working_free_time_df.columns:
+        warnings.append("Free time data is missing 'Available Hours' column")
+        return scheduled_tasks, warnings, unallocated_tasks
     
     # Prioritize tasks
     tasks_df = calculate_task_priority(tasks_df)
@@ -123,105 +132,32 @@ def schedule_tasks(tasks_df, working_free_time_df):
     
     # Main scheduling loop
     for idx, task in tasks_df.iterrows():
+        task_time_remaining = task['Estimated Time']
         task_name = task['Task']
         due_date = task['Due Date']
-        total_hours = task['Estimated Time']
         
-        # Check if this task has focus sessions defined - with extremely defensive coding
-        has_focus_sessions = False
-        num_sessions = None
-        session_length = None
+        # Check for large tasks
+        if task_time_remaining > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+            warnings.append(
+                f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
+            )
         
-        # First check if Focus Sessions column exists
-        if 'Focus Sessions' in tasks_df.columns:
-            # Get the value, but don't assume it's a number yet
-            focus_sessions_value = task.get('Focus Sessions', None)
+        # Allocate time across available windows
+        for f_idx, window in working_free_time_df.iterrows():
+            if task_time_remaining <= 0:
+                break
             
-            # First check if it's not null/None
-            if pd.notnull(focus_sessions_value):
-                # Then try to convert to a number and check if > 1
-                try:
-                    focus_sessions_num = float(focus_sessions_value)
-                    if focus_sessions_num > 1:
-                        has_focus_sessions = True
-                        num_sessions = int(focus_sessions_num)
-                        
-                        # Only if we have valid focus sessions, check for session length
-                        if 'Session Length' in tasks_df.columns:
-                            session_length_value = task.get('Session Length', None)
-                            if pd.notnull(session_length_value):
-                                try:
-                                    session_length = float(session_length_value)
-                                except (ValueError, TypeError):
-                                    # If conversion fails, calculate it
-                                    session_length = total_hours / num_sessions
-                            else:
-                                # Calculate session length if it's null
-                                session_length = total_hours / num_sessions
-                        else:
-                            # Calculate session length if column doesn't exist
-                            session_length = total_hours / num_sessions
-                except (ValueError, TypeError):
-                    # If we can't convert to a number, just treat as a regular task
-                    pass
-        
-        if has_focus_sessions and num_sessions and session_length:
-            # Handle focus session task - the rest remains the same
-            # ...
+            if pd.notnull(due_date) and window['Date'] > due_date:
+                break
             
-            # Track how many sessions we've managed to schedule
-            sessions_scheduled = 0
-            
-            # Try to schedule each session
-            for f_idx, window in working_free_time_df.iterrows():
-                if sessions_scheduled >= num_sessions:
-                    break
-                
-                if pd.notnull(due_date) and window['Date'] > due_date:
-                    break
-                
+            # Safely access available_hours with error handling
+            try:
                 available_hours = window['Available Hours']
-                if available_hours >= session_length:
-                    # We can schedule a full session here
-                    scheduled_tasks.append({
-                        'Task': f"{task_name} (Session {sessions_scheduled+1}/{num_sessions})",
-                        'Date': window['Date'],
-                        'Allocated Hours': session_length
-                    })
-                    working_free_time_df.at[f_idx, 'Available Hours'] -= session_length
-                    sessions_scheduled += 1
-            
-            # Track unallocated sessions
-            if sessions_scheduled < num_sessions:
-                unallocated_sessions = num_sessions - sessions_scheduled
-                unallocated_hours = unallocated_sessions * session_length
                 
-                warnings.append(
-                    f"HANDLE: {task_name} (Due: {due_date.date() if pd.notnull(due_date) else 'None'}) "
-                    f"needs {num_sessions} sessions, but only {sessions_scheduled} sessions could be scheduled."
-                )
-                
-                # Track the unallocated task with details
-                unallocated_tasks.append({
-                    'Task': task_name,
-                    'Task Index': idx,
-                    'Due Date': due_date,
-                    'Total Hours': total_hours,
-                    'Allocated Hours': sessions_scheduled * session_length,
-                    'Unallocated Hours': unallocated_hours
-                })
-        else:
-            # Original scheduling logic for regular tasks
-            task_time_remaining = total_hours
-            
-            for f_idx, window in working_free_time_df.iterrows():
-                if task_time_remaining <= 0:
-                    break
-                
-                if pd.notnull(due_date) and window['Date'] > due_date:
-                    break
-                
-                available_hours = window['Available Hours']
+                # Check if available_hours is valid
+                if pd.isna(available_hours):
+                    continue
+                    
                 if available_hours > 0:
                     allocated_time = min(task_time_remaining, available_hours)
                     scheduled_tasks.append({
@@ -231,23 +167,26 @@ def schedule_tasks(tasks_df, working_free_time_df):
                     })
                     working_free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
                     task_time_remaining -= allocated_time
+            except Exception as e:
+                warnings.append(f"Error processing time window {f_idx}: {str(e)}")
+                continue
+        
+        # Track unallocated tasks
+        if pd.notnull(due_date) and task_time_remaining > 0:
+            warnings.append(
+                f"HANDLE: {task_name} (Due: {due_date.date()}) "
+                f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
+            )
             
-            # Track unallocated tasks
-            if task_time_remaining > 0:
-                warnings.append(
-                    f"HANDLE: {task_name} (Due: {due_date.date() if pd.notnull(due_date) else 'None'}) "
-                    f"needs {total_hours}h, but only {total_hours - task_time_remaining}h scheduled."
-                )
-                
-                # Track the unallocated task with details
-                unallocated_tasks.append({
-                    'Task': task_name,
-                    'Task Index': idx,
-                    'Due Date': due_date,
-                    'Total Hours': total_hours,
-                    'Allocated Hours': total_hours - task_time_remaining,
-                    'Unallocated Hours': task_time_remaining
-                })
+            # Track the unallocated task with details
+            unallocated_tasks.append({
+                'Task': task_name,
+                'Task Index': idx,
+                'Due Date': due_date,
+                'Total Hours': task['Estimated Time'],
+                'Allocated Hours': task['Estimated Time'] - task_time_remaining,
+                'Unallocated Hours': task_time_remaining
+            })
     
     return scheduled_tasks, warnings, unallocated_tasks
     
