@@ -104,7 +104,6 @@ def wizard_step_one():
 def wizard_step_two():
     """
     Step 2: Choose a breakdown approach.
-    FIXED: Use a single radio group rather than multiple separate radios
     """
     st.subheader("Step 2: Choose a Breakdown Approach")
     
@@ -135,19 +134,14 @@ def wizard_step_two():
             "Fixed Duration Event - Mark as event that shouldn't be broken down"
         ]
     
-    # Use a single radio button group for approach selection
-    # Initialize the selection to the first option if not set
-    if 'selected_approach' not in st.session_state:
-        st.session_state.selected_approach = approach_options[0]
-    
-    selected_approach = st.radio(
-        "Select an approach:",
-        approach_options,
-        key="approach_selection"
-    )
+    # Use radio buttons for approach selection
+    approach_index = 0
+    for i, approach in enumerate(approach_options):
+        if st.radio("", [approach], key=f"approach_{i}", label_visibility="collapsed"):
+            approach_index = i
     
     # Store the selected approach
-    st.session_state.wizard_approach = selected_approach
+    st.session_state.wizard_approach = approach_options[approach_index]
     
     # Navigation buttons
     cols = st.columns([1, 1, 1])
@@ -193,7 +187,6 @@ def wizard_step_three():
 def handle_planning_session(idx, task, task_name, hours):
     """
     Handle the 'Schedule a Planning Session' approach.
-    FIXED: Properly create DataFrame with data in a list for each field
     """
     with st.form(key="planning_form"):
         st.write("Create a planning task to help you break down this work later.")
@@ -237,14 +230,14 @@ def handle_planning_session(idx, task, task_name, hours):
             # Load tasks to ensure we're working with the latest data
             tasks_df = load_tasks()
             
-            # FIXED: Create DataFrame with list for each field (properly creates a single row)
+            # Add the planning task
             new_task = pd.DataFrame({
-                'Project': [task['Project'] if 'Project' in task else "Planning"],
-                'Task': [planning_task_name],
-                'Estimated Time': [planning_hours],
-                'Due Date': [pd.to_datetime(planning_date)],
-                'Importance': [4],  # High importance
-                'Complexity': [2]   # Moderate complexity
+                'Project': task['Project'] if 'Project' in task else "Planning",
+                'Task': planning_task_name,
+                'Estimated Time': planning_hours,
+                'Due Date': pd.to_datetime(planning_date),
+                'Importance': 4,  # High importance
+                'Complexity': 2   # Moderate complexity
             })
             
             # Update original task description to show it's pending planning
@@ -299,10 +292,10 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
                 hours_value = round(hours / num_subtasks, 1) if i == 0 else 0
                 hour = st.number_input(
                     "Hours:", 
-                    min_value=0.5, 
+                    min_value=float(0.5), 
                     max_value=float(hours), 
-                    value=hours_value,
-                    step=0.5,
+                    value=float(hours_value),
+                    step=float(0.5),
                     key=f"subtask_hours_{i}"
                 )
                 subtask_hours.append(hour)
@@ -440,7 +433,6 @@ def handle_focus_sessions(idx, task, task_name, hours):
 def handle_iterative_project(idx, task, task_name, hours):
     """
     Handle the 'Iterative Project' approach.
-    FIXED: Properly create DataFrames from task dictionaries
     """
     with st.form(key="iterative_form"):
         st.write("Create a structure for a project that will evolve as work progresses.")
@@ -492,9 +484,9 @@ def handle_iterative_project(idx, task, task_name, hours):
             remaining_task['Task'] = f"{task_name} [REMAINING WORK]"
             remaining_task['Estimated Time'] = hours - exploration_hours
             
-            # FIXED: Convert to DataFrames with list values
-            exploration_df = pd.DataFrame({k: [v] for k, v in exploration_task.items()})
-            remaining_df = pd.DataFrame({k: [v] for k, v in remaining_task.items()})
+            # Convert to DataFrames
+            exploration_df = pd.DataFrame([exploration_task])
+            remaining_df = pd.DataFrame([remaining_task])
             
             # Remove the original task
             tasks_df = tasks_df.drop(idx)
@@ -516,8 +508,8 @@ def handle_fixed_event(idx, task, task_name, hours):
     """
     Handle the 'Fixed Duration Event' approach.
     """
-    with st.form(key="fixed_form"):
-        st.write("Mark this task as a fixed duration event that shouldn't be broken down.")
+    with st.form(key="fixed_event_form"):
+        st.write("Mark this task as a fixed-duration event that doesn't need to be broken down.")
         
         # Option to update the task name
         update_name = st.checkbox(
@@ -539,7 +531,7 @@ def handle_fixed_event(idx, task, task_name, hours):
         with cols[1]:
             cancel = st.form_submit_button("Cancel")
         with cols[2]:
-            update_task = st.form_submit_button("Update Task")
+            mark_fixed = st.form_submit_button("Mark as Fixed Event")
         
         if previous_step:
             prev_wizard_step()
@@ -549,19 +541,25 @@ def handle_fixed_event(idx, task, task_name, hours):
             exit_wizard()
             st.rerun()
         
-        if update_task:
+        if mark_fixed:
             # Load tasks to ensure we're working with the latest data
             tasks_df = load_tasks()
             
-            # Update name if requested
+            # Update the task name if requested
             if update_name:
                 tasks_df.at[idx, 'Task'] = new_name
+            
+            # Add metadata about fixed event - make sure column exists
+            if 'Fixed Event' not in tasks_df.columns:
+                tasks_df['Fixed Event'] = False
+            
+            tasks_df.at[idx, 'Fixed Event'] = True
             
             # Save changes
             save_tasks(tasks_df)
             
             # Show success message
-            st.success(f"Updated task as a fixed duration event.")
+            st.success(f"Marked '{task_name}' as a fixed event.")
             
             # Auto-exit
             exit_wizard()
