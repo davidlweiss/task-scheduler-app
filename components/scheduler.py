@@ -110,7 +110,7 @@ def create_daily_summary(free_time_df):
 def schedule_tasks(tasks_df, working_free_time_df):
     """
     Schedule tasks based on priority and available time.
-    Handle focus sessions appropriately, regardless of how they were created.
+    Handle focus sessions appropriately, with robust error handling.
     """
     scheduled_tasks = []
     warnings = []
@@ -132,17 +132,24 @@ def schedule_tasks(tasks_df, working_free_time_df):
         num_sessions = None
         session_length = None
         
-        # First check if Focus Sessions column exists and has a value
+        # First check if Focus Sessions column exists
         if 'Focus Sessions' in tasks_df.columns:
-            if pd.notnull(task['Focus Sessions']) and task['Focus Sessions'] > 1:
+            # Safely check if this specific task has a focus session value
+            focus_sessions_value = task.get('Focus Sessions')
+            if pd.notnull(focus_sessions_value) and focus_sessions_value > 1:
                 has_focus_sessions = True
-                num_sessions = int(task['Focus Sessions'])
+                num_sessions = int(focus_sessions_value)
                 
-                # Check if Session Length exists and is valid
-                if 'Session Length' in tasks_df.columns and pd.notnull(task['Session Length']):
-                    session_length = float(task['Session Length'])
+                # Check if Session Length exists and is valid for this task
+                if 'Session Length' in tasks_df.columns:
+                    session_length_value = task.get('Session Length')
+                    if pd.notnull(session_length_value) and session_length_value > 0:
+                        session_length = float(session_length_value)
+                    else:
+                        # Calculate session length if not provided
+                        session_length = total_hours / num_sessions
                 else:
-                    # Calculate session length if not provided
+                    # Calculate session length if column doesn't exist
                     session_length = total_hours / num_sessions
         
         if has_focus_sessions and num_sessions and session_length:
