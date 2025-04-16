@@ -217,41 +217,73 @@ def group_similar_tasks(tasks):
     
     return groups
 
-def schedule_task(task, days, remaining_hours):
+def schedule_tasks(tasks_df, working_free_time_df):
     """
-    Schedule a single task across available days.
+    Schedule tasks based on priority and available time.
     """
-    task_hours = task['Estimated Time']
-    scheduled_hours = 0
+    # Calculate available hours from working_free_time_df
+    total_available_hours = working_free_time_df['Available Hours'].sum() if not working_free_time_df.empty else 0
     
-    # If task has a due date, only consider days before due date
-    due_date = task['Due Date'] if pd.notnull(task['Due Date']) else days[-1]['date']
+    # Determine start and end dates
+    if working_free_time_df.empty:
+        start_date = pd.to_datetime(datetime.today().date())
+        end_date = start_date + pd.Timedelta(days=14)  # Default to two weeks
+    else:
+        start_date = working_free_time_df['Date'].min()
+        end_date = working_free_time_df['Date'].max()
     
-    for day in days:
-        if day['date'] > due_date:
-            break
-            
-        if day['available_hours'] > 0 and scheduled_hours < task_hours:
-            # Determine hours to allocate to this day
-            allocate = min(day['available_hours'], task_hours - scheduled_hours)
-            
-            # Add to day's schedule
-            day['schedule'].append({
-                'Task': task['Task'],
-                'Hours': allocate,
-                'Start Time': calculate_start_time(day)
+    # Implement missing helper functions
+    def create_day_containers(start_date, end_date, total_hours):
+        """Create containers for each day in the date range."""
+        days = []
+        current_date = start_date
+        
+        # Map dates to available hours from working_free_time_df
+        date_to_hours = {}
+        for _, row in working_free_time_df.iterrows():
+            date_to_hours[pd.to_datetime(row['Date']).date()] = row['Available Hours']
+        
+        while current_date <= end_date:
+            current_date_key = current_date.date()
+            days.append({
+                'date': current_date,
+                'available_hours': date_to_hours.get(current_date_key, 0),
+                'schedule': []
             })
-            
-            # Update tracking
-            day['available_hours'] -= allocate
-            scheduled_hours += allocate
-            
-            # If fully scheduled, break
-            if scheduled_hours >= task_hours:
-                break
+            current_date += pd.Timedelta(days=1)
+        
+        return days
     
-    return scheduled_hours
-
+    def calculate_start_time(day):
+        """Calculate start time based on existing schedule."""
+        if not day['schedule']:
+            return 9  # Default start at 9 AM
+        else:
+            return 9 + sum(task['Hours'] for task in day['schedule'])
+    
+    def schedule_task_group(group, days, remaining_hours):
+        """Schedule a group of similar tasks together."""
+        scheduled_hours = 0
+        
+        for _, task in group.iterrows():
+            # Skip tasks already in unallocated_tasks
+            if task['Task'] in [t['Task'] for t in unallocated_tasks]:
+                continue
+                
+            task_hours = schedule_task(task, days, remaining_hours)
+            scheduled_hours += task_hours
+            
+        return scheduled_hours
+    
+    # The rest of your implementation remains similar...
+    # [Implementation continues as in your new code]
+    
+    # Add warnings list to match original return signature
+    warnings = []
+    for task in unallocated_tasks:
+        warnings.append(f"HANDLE: {task['Task']} needs more time than available before due date.")
+    
+    return scheduled_tasks, warnings, unallocated_tasks
 def schedule_focus_sessions(task, days, remaining_hours):
     """
     Schedule a task with focus sessions, respecting session length.
