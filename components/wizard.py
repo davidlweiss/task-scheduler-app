@@ -193,6 +193,7 @@ def wizard_step_three():
 def handle_planning_session(idx, task, task_name, hours):
     """
     Handle the 'Schedule a Planning Session' approach.
+    FIXED: Properly create DataFrame with data in a list for each field
     """
     with st.form(key="planning_form"):
         st.write("Create a planning task to help you break down this work later.")
@@ -236,14 +237,14 @@ def handle_planning_session(idx, task, task_name, hours):
             # Load tasks to ensure we're working with the latest data
             tasks_df = load_tasks()
             
-            # Add the planning task
+            # FIXED: Create DataFrame with list for each field (properly creates a single row)
             new_task = pd.DataFrame({
-                'Project': task['Project'] if 'Project' in task else "Planning",
-                'Task': planning_task_name,
-                'Estimated Time': planning_hours,
-                'Due Date': pd.to_datetime(planning_date),
-                'Importance': 4,  # High importance
-                'Complexity': 2   # Moderate complexity
+                'Project': [task['Project'] if 'Project' in task else "Planning"],
+                'Task': [planning_task_name],
+                'Estimated Time': [planning_hours],
+                'Due Date': [pd.to_datetime(planning_date)],
+                'Importance': [4],  # High importance
+                'Complexity': [2]   # Moderate complexity
             })
             
             # Update original task description to show it's pending planning
@@ -439,6 +440,7 @@ def handle_focus_sessions(idx, task, task_name, hours):
 def handle_iterative_project(idx, task, task_name, hours):
     """
     Handle the 'Iterative Project' approach.
+    FIXED: Properly create DataFrames from task dictionaries
     """
     with st.form(key="iterative_form"):
         st.write("Create a structure for a project that will evolve as work progresses.")
@@ -490,9 +492,9 @@ def handle_iterative_project(idx, task, task_name, hours):
             remaining_task['Task'] = f"{task_name} [REMAINING WORK]"
             remaining_task['Estimated Time'] = hours - exploration_hours
             
-            # Convert to DataFrames
-            exploration_df = pd.DataFrame([exploration_task])
-            remaining_df = pd.DataFrame([remaining_task])
+            # FIXED: Convert to DataFrames with list values
+            exploration_df = pd.DataFrame({k: [v] for k, v in exploration_task.items()})
+            remaining_df = pd.DataFrame({k: [v] for k, v in remaining_task.items()})
             
             # Remove the original task
             tasks_df = tasks_df.drop(idx)
