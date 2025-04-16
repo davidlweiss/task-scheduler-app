@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-from models.task import add_task
-from models.backlog import add_backlog_item
+from models.task import load_tasks, save_tasks, add_task
+from models.backlog import load_backlog, save_backlog, add_backlog_item
 
 def show_task_intake_wizard():
     """
@@ -180,11 +180,11 @@ def show_task_intake_wizard():
         with col3:
             if st.button("Submit"):
                 # Process form submission
-                destination, item = process_task_submission(st.session_state.task_data)
+                destination, item_data = process_task_submission(st.session_state.task_data)
                 
                 # Show appropriate success message
                 if destination == "tasks":
-                    if "[PLANNING]" in item['Task']:
+                    if "[PLANNING]" in item_data['Task']:
                         st.success("Added a 30-minute planning session to your tasks!")
                     else:
                         st.success("Task added successfully to your task list!")
@@ -249,24 +249,40 @@ def process_task_submission(task_data):
         if is_ambiguous:
             # Has due date but ambiguous -> 30min planning session
             planning_task = create_planning_session(task_data, due_date)
-            add_task(planning_task)
+            # Use the task_data dictionary directly instead of using add_task
+            tasks_df = load_tasks()
+            new_task = pd.DataFrame([planning_task])
+            tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+            save_tasks(tasks_df)
             return "tasks", planning_task
         else:
             # Has due date and not ambiguous -> regular task
             regular_task = create_regular_task(task_data, due_date)
-            add_task(regular_task)
+            # Use the task_data dictionary directly instead of using add_task
+            tasks_df = load_tasks()
+            new_task = pd.DataFrame([regular_task])
+            tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+            save_tasks(tasks_df)
             return "tasks", regular_task
     else:  # No due date
         if is_important:
             # Important but no due date -> 30min planning session (due tomorrow)
             tomorrow = datetime.today() + timedelta(days=1)
             planning_task = create_planning_session(task_data, tomorrow)
-            add_task(planning_task)
+            # Use the task_data dictionary directly instead of using add_task
+            tasks_df = load_tasks()
+            new_task = pd.DataFrame([planning_task])
+            tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+            save_tasks(tasks_df)
             return "tasks", planning_task
         else:
             # Not important and no due date -> backlog
             backlog_item = create_backlog_item(task_data)
-            add_backlog_item(backlog_item)
+            # Use the dictionary directly instead of using add_backlog_item
+            backlog_df = load_backlog()
+            new_item = pd.DataFrame([backlog_item])
+            backlog_df = pd.concat([backlog_df, new_item], ignore_index=True)
+            save_backlog(backlog_df)
             return "backlog", backlog_item
 
 def create_planning_session(task_data, due_date):
