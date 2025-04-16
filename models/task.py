@@ -49,7 +49,8 @@ def get_large_tasks():
     large_tasks = []
     
     for idx, task in tasks_df.iterrows():
-        if task['Estimated Time'] > 6 and not any(tag in str(task['Task']) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+        estimated_time = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
+        if estimated_time > 6 and not any(tag in str(task['Task']) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
             large_tasks.append((idx, task))
     
     return large_tasks
@@ -61,8 +62,17 @@ def calculate_task_priority(tasks_df):
     today = pd.to_datetime(datetime.today().date())
     
     def calc_priority(row):
-        days_until_due = (row['Due Date'] - today).days if pd.notnull(row['Due Date']) else 9999
-        return days_until_due * 1 - row['Importance'] * 5
+        # Ensure Importance is a number
+        importance = float(row['Importance']) if pd.notnull(row['Importance']) else 0
+        
+        # Calculate days until due, handling null values
+        if pd.isnull(row['Due Date']):
+            days_until_due = 9999  # Large number for tasks with no due date
+        else:
+            days_until_due = (row['Due Date'] - today).days
+            
+        # Calculate the priority score
+        return days_until_due * 1 - importance * 5
     
     tasks_df['Priority Score'] = tasks_df.apply(calc_priority, axis=1)
     return tasks_df.sort_values(by=['Priority Score', 'Complexity'])
