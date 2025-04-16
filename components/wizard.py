@@ -289,27 +289,32 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
                 subtask_names.append(name)
             
             with col2:
-                # Distribute hours evenly among subtasks for initial values
-                hours_value = float(hours) / float(num_subtasks) if i == 0 else 0.0
-                hours_value = round(hours_value, 2)
+                # Calculate initial hours - ensure it's at least the minimum value
+                default_hours = max(0.5, float(hours) / float(num_subtasks))
+                if i > 0:
+                    default_hours = 0.5  # Set a safe minimum for non-first subtasks
                 
-                # All values must be float type to avoid mixed numeric types error
+                # Ensure we don't exceed the maximum
+                max_allowed = float(hours) - (num_subtasks - 1) * 0.5 if i == 0 else float(hours)
+                max_allowed = max(0.5, max_allowed)
+                
+                # All values must be explicitly float
                 hour = st.number_input(
                     "Hours:", 
-                    min_value=float(0.5), 
-                    max_value=float(hours), 
-                    value=float(hours_value),
-                    step=float(0.5),
+                    min_value=0.5,  # Use a simpler approach with native Python numbers
+                    max_value=float(max_allowed),
+                    value=float(default_hours),
+                    step=0.5,
                     key=f"subtask_hours_{i}"
                 )
-                subtask_hours.append(float(hour))
-                total_hours += float(hour)
+                subtask_hours.append(hour)
+                total_hours += hour
         
         # Show the total hours allocated
         remaining = float(hours) - total_hours
         st.write(f"Total allocated: **{total_hours}h** | Original estimate: **{hours}h** | Remaining: **{remaining}h**")
         
-        # Form submit buttons - these are critical
+        # Form buttons
         cols = st.columns([1, 1, 1])
         with cols[0]:
             previous_step = st.form_submit_button("Previous")
@@ -318,7 +323,6 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
         with cols[2]:
             create_subtasks = st.form_submit_button("Create Subtasks")
         
-        # Handle form submission actions
         if previous_step:
             prev_wizard_step()
             st.rerun()
@@ -336,7 +340,7 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
             for i in range(num_subtasks):
                 task_dict = task.copy()
                 task_dict['Task'] = subtask_names[i]
-                task_dict['Estimated Time'] = float(subtask_hours[i])
+                task_dict['Estimated Time'] = subtask_hours[i]
                 new_tasks.append(task_dict)
             
             # Remove the original task
