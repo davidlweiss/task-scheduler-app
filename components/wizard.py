@@ -442,3 +442,64 @@ def handle_iterative_project(idx, task, task_name, hours):
             "How long should the initial exploration session be?", 
             min_value=1.0, 
             max_value=4.0, 
+            value=2.0,
+            step=0.5
+        )
+        
+        # Expected sessions
+        expected_sessions = math.ceil((hours - exploration_hours) / 4) + 1
+        st.write(f"Based on the total estimate of {hours}h, you'll likely need about {expected_sessions} sessions.")
+        
+        # Form buttons
+        cols = st.columns([1, 1, 1])
+        with cols[0]:
+            previous_step = st.form_submit_button("Previous")
+        with cols[1]:
+            cancel = st.form_submit_button("Cancel")
+        with cols[2]:
+            create_project = st.form_submit_button("Create Iterative Project")
+        
+        if previous_step:
+            prev_wizard_step()
+            st.rerun()
+        
+        if cancel:
+            exit_wizard()
+            st.rerun()
+        
+        if create_project:
+            # Load tasks to ensure we're working with the latest data
+            tasks_df = load_tasks()
+            
+            # Copy most attributes from original task
+            task_dict = task.copy()
+            
+            exploration_task = task_dict.copy()
+            exploration_task['Project'] = f"Iterative: {task_name}"
+            exploration_task['Task'] = f"Initial exploration: {task_name}"
+            exploration_task['Estimated Time'] = exploration_hours
+            
+            remaining_task = task_dict.copy()
+            remaining_task['Project'] = f"Iterative: {task_name}"
+            remaining_task['Task'] = f"{task_name} [REMAINING WORK]"
+            remaining_task['Estimated Time'] = hours - exploration_hours
+            
+            # Convert to DataFrames
+            exploration_df = pd.DataFrame([exploration_task])
+            remaining_df = pd.DataFrame([remaining_task])
+            
+            # Remove the original task
+            tasks_df = tasks_df.drop(idx)
+            
+            # Add new tasks
+            tasks_df = pd.concat([tasks_df, exploration_df, remaining_df], ignore_index=True)
+            
+            # Save changes
+            save_tasks(tasks_df)
+            
+            # Show success message
+            st.success("Created iterative project structure with initial exploration session and placeholder for remaining work.")
+            
+            # Auto-exit
+            exit_wizard()
+            st.rerun()
