@@ -29,6 +29,10 @@ def run_scheduler():
         total_free_time = get_total_free_time()
         total_estimated_time = tasks_df['Estimated Time'].sum() if not tasks_df.empty else 0
         
+        # Convert to float to ensure proper comparison
+        total_free_time = float(total_free_time)
+        total_estimated_time = float(total_estimated_time)
+        
         # Display capacity summary
         display_capacity_summary(total_free_time, total_estimated_time)
         
@@ -105,147 +109,63 @@ def create_daily_summary(free_time_df):
 def schedule_tasks(tasks_df, working_free_time_df):
     """
     Schedule tasks based on priority and available time.
-    Modified to better handle date comparisons and ensure fair allocation.
     """
     scheduled_tasks = []
     warnings = []
     unallocated_tasks = []
     
-    # Prioritize tasks - make a copy to avoid modifying the original
-    tasks_df = calculate_task_priority(tasks_df.copy())
+    # Prioritize tasks
+    tasks_df = calculate_task_priority(tasks_df)
     
-    # Important fix: Ensure all dates are properly normalized to date-only (no time component)
-    # This prevents inequality due to time components
     today = pd.to_datetime(datetime.today().date())
     
-    # Normalize due dates to remove time components for comparison
-    tasks_df['Due Date'] = tasks_df['Due Date'].apply(lambda x: x.normalize() if pd.notnull(x) else x)
-    working_free_time_df['Date'] = working_free_time_df['Date'].apply(lambda x: x.normalize() if pd.notnull(x) else x)
-    
-    # Group tasks by due date first to ensure fair allocation
-    # This ensures all tasks due on the same day get a fair chance at the available time
-    if not working_free_time_df.empty:
-        # Get unique due dates from tasks, sorted
-        due_dates = tasks_df['Due Date'].dropna().unique()
-        due_dates = sorted(due_dates)
-        
-        # First pass - allocate time for each due date's tasks
-        for due_date in due_dates:
-            # Get tasks for this due date
-            day_tasks = tasks_df[tasks_df['Due Date'] == due_date]
-            
-            # Skip if no tasks for this day
-            if day_tasks.empty:
-                continue
-                
-            # Get available time windows up to this due date
-            available_windows = working_free_time_df[working_free_time_df['Date'] <= due_date]
-            
-            # Skip if no available windows
-            if available_windows.empty:
-                # All tasks for this due date are unallocated
-                for idx, task in day_tasks.iterrows():
-                    unallocated_tasks.append({
-                        'Task': task['Task'],
-                        'Task Index': idx,
-                        'Due Date': task['Due Date'],
-                        'Total Hours': task['Estimated Time'],
-                        'Allocated Hours': 0,
-                        'Unallocated Hours': task['Estimated Time']
-                    })
-                continue
-            
-            # Calculate total available hours up to due date
-            total_available = available_windows['Available Hours'].sum()
-            
-            # Calculate total needed hours for this due date
-            total_needed = day_tasks['Estimated Time'].sum()
-            
-            # If not enough time, allocate proportionally based on priority
-            if total_needed > total_available and total_available > 0:
-                # Calculate priority-weighted allocation
-                day_tasks['Priority Score'] = day_tasks.apply(
-                    lambda row: row['Importance'] * 2 + (5 - row['Complexity']), 
-                    axis=1
-                )
-                total_priority = day_tasks['Priority Score'].sum()
-                
-                if total_priority > 0:
-                    # Allocate hours proportionally based on priority weight
-                    day_tasks['Allocated'] = day_tasks.apply(
-                        lambda row: min(row['Estimated Time'], (row['Priority Score'] / total_priority) * total_available),
-                        axis=1
-                    )
-                else:
-                    # Equal distribution if priorities sum to zero
-                    day_tasks['Allocated'] = day_tasks.apply(
-                        lambda row: min(row['Estimated Time'], total_available / len(day_tasks)),
-                        axis=1
-                    )
-            else:
-                # Enough time available, allocate full hours
-                day_tasks['Allocated'] = day_tasks['Estimated Time']
-            
-            # Allocate the hours for each task in this due date group
-            for idx, task in day_tasks.iterrows():
-                allocated_hours = task['Allocated']
-                remaining_to_allocate = allocated_hours
-                
-                # Try to allocate across available windows
-                for f_idx, window in available_windows.iterrows():
-                    if remaining_to_allocate <= 0:
-                        break
-                    
-                    available_in_window = working_free_time_df.at[f_idx, 'Available Hours']
-                    if available_in_window <= 0:
-                        continue
-                    
-                    # Calculate how much to allocate in this window
-                    allocate_now = min(remaining_to_allocate, available_in_window)
-                    
-                    if allocate_now > 0:
-                        # Add to scheduled tasks
-                        scheduled_tasks.append({
-                            'Task': task['Task'],
-                            'Date': window['Date'],
-                            'Allocated Hours': allocate_now
-                        })
-                        
-                        # Update remaining available in window
-                        working_free_time_df.at[f_idx, 'Available Hours'] -= allocate_now
-                        remaining_to_allocate -= allocate_now
-                
-                # Check if we have unallocated hours for this task
-                actual_allocated = allocated_hours - remaining_to_allocate
-                if actual_allocated < task['Estimated Time']:
-                    unallocated_hours = task['Estimated Time'] - actual_allocated
-                    
-                    # Add to unallocated task list
-                    if unallocated_hours > 0:
-                        warnings.append(
-                            f"HANDLE: {task['Task']} (Due: {task['Due Date'].date()}) "
-                            f"needs {task['Estimated Time']}h, but only {actual_allocated}h scheduled before due date."
-                        )
-                        
-                        unallocated_tasks.append({
-                            'Task': task['Task'],
-                            'Task Index': idx,
-                            'Due Date': task['Due Date'],
-                            'Total Hours': task['Estimated Time'],
-                            'Allocated Hours': actual_allocated,
-                            'Unallocated Hours': unallocated_hours
-                        })
-    
-    # Identify large tasks separately from allocation issues
+    # Main scheduling loop
     for idx, task in tasks_df.iterrows():
-        task_time = task['Estimated Time']
+        task_time_remaining = float(task['Estimated Time'])
         task_name = task['Task']
+        due_date = task['Due Date']
         
         # Check for large tasks
-        if task_time > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+        if task_time_remaining > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
             warnings.append(
                 f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
             )
+        
+        # Allocate time across available windows
+        for f_idx, window in working_free_time_df.iterrows():
+            if task_time_remaining <= 0:
+                break
+            
+            if pd.notnull(due_date) and window['Date'] > due_date:
+                break
+            
+            available_hours = float(window['Available Hours'])
+            if available_hours > 0:
+                allocated_time = min(task_time_remaining, available_hours)
+                scheduled_tasks.append({
+                    'Task': task_name,
+                    'Date': window['Date'],
+                    'Allocated Hours': allocated_time
+                })
+                working_free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
+                task_time_remaining -= allocated_time
+        
+        # Track unallocated tasks
+        if pd.notnull(due_date) and task_time_remaining > 0:
+            warnings.append(
+                f"HANDLE: {task_name} (Due: {due_date.date()}) "
+                f"needs {float(task['Estimated Time'])}h, but only {float(task['Estimated Time']) - task_time_remaining}h scheduled before due date."
+            )
+            
+            # Track the unallocated task with details
+            unallocated_tasks.append({
+                'Task': task_name,
+                'Task Index': idx,
+                'Due Date': due_date,
+                'Total Hours': float(task['Estimated Time']),
+                'Allocated Hours': float(task['Estimated Time']) - task_time_remaining,
+                'Unallocated Hours': task_time_remaining
+            })
     
     return scheduled_tasks, warnings, unallocated_tasks
 
