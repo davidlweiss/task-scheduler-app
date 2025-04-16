@@ -4,11 +4,21 @@ from components.free_time_form import show_free_time_manager
 from components.scheduler import run_scheduler
 from components.backlog_form import show_backlog_manager
 from components.wizard import run_wizard
-from components.task_intake import show_task_intake_wizard
 from utils.session_state import initialize_session_state
 
 def main():
     """Main entry point for the Task Scheduler application."""
+    # Add custom CSS to make containers wider
+    st.markdown("""
+        <style>
+        .main .block-container {
+            max-width: 1400px;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
     st.title("Dynamic Task Scheduler V8")
     
     # Initialize session state
@@ -19,10 +29,7 @@ def main():
         run_wizard()
     else:
         # Create tabs for the main app interface
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "Manage Tasks", "Manage Free Time", "Run Scheduler", 
-            "Idea Backlog", "New Task Intake"
-        ])
+        tab1, tab2, tab3, tab4 = st.tabs(["Manage Tasks", "Manage Free Time", "Run Scheduler", "Idea Backlog"])
         
         with tab1:
             show_task_manager()
@@ -35,9 +42,6 @@ def main():
         
         with tab4:
             show_backlog_manager()
-            
-        with tab5:
-            show_task_intake_wizard()
 
 if __name__ == "__main__":
     main()
