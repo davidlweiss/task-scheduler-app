@@ -1,28 +1,17 @@
 import pandas as pd
-import os
-
-# File path
-FREE_TIME_FILE = 'free_time.csv'
+from utils.db_utils import table_to_df, df_to_table, execute_query
 
 def load_free_time():
     """
-    Load free time data from CSV or create a new DataFrame if file doesn't exist.
+    Load free time data from SQLite database.
     """
-    if os.path.exists(FREE_TIME_FILE):
-        df = pd.read_csv(FREE_TIME_FILE)
-        # Ensure date is properly formatted
-        if 'Date' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'])
-        return df
-    else:
-        return pd.DataFrame(columns=['Date', 'Available Hours'])
+    return table_to_df('free_time')
 
 def save_free_time(free_time_df):
     """
-    Save free time data to CSV file.
+    Save free time data to SQLite database.
     """
-    free_time_df.to_csv(FREE_TIME_FILE, index=False)
-    return True
+    return df_to_table(free_time_df, 'free_time')
 
 def add_free_time(date, hours):
     """
