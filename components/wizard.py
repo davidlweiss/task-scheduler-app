@@ -270,13 +270,13 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
             "How many subtasks do you want to create?", 
             min_value=2, 
             max_value=10, 
-            value=3
+            value=4
         )
         
         # Create input fields for each subtask
         subtask_names = []
         subtask_hours = []
-        total_hours = 0
+        total_hours = 0.0
         
         for i in range(num_subtasks):
             col1, col2 = st.columns([3, 1])
@@ -289,7 +289,11 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
                 subtask_names.append(name)
             
             with col2:
-                hours_value = round(hours / num_subtasks, 1) if i == 0 else 0
+                # Distribute hours evenly among subtasks for initial values
+                hours_value = float(hours) / float(num_subtasks) if i == 0 else 0.0
+                hours_value = round(hours_value, 2)
+                
+                # All values must be float type to avoid mixed numeric types error
                 hour = st.number_input(
                     "Hours:", 
                     min_value=float(0.5), 
@@ -298,14 +302,14 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
                     step=float(0.5),
                     key=f"subtask_hours_{i}"
                 )
-                subtask_hours.append(hour)
-                total_hours += hour
+                subtask_hours.append(float(hour))
+                total_hours += float(hour)
         
         # Show the total hours allocated
-        remaining = hours - total_hours
+        remaining = float(hours) - total_hours
         st.write(f"Total allocated: **{total_hours}h** | Original estimate: **{hours}h** | Remaining: **{remaining}h**")
         
-        # Form buttons
+        # Form submit buttons - these are critical
         cols = st.columns([1, 1, 1])
         with cols[0]:
             previous_step = st.form_submit_button("Previous")
@@ -314,6 +318,7 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
         with cols[2]:
             create_subtasks = st.form_submit_button("Create Subtasks")
         
+        # Handle form submission actions
         if previous_step:
             prev_wizard_step()
             st.rerun()
@@ -331,7 +336,7 @@ def handle_break_into_subtasks(idx, task, task_name, hours):
             for i in range(num_subtasks):
                 task_dict = task.copy()
                 task_dict['Task'] = subtask_names[i]
-                task_dict['Estimated Time'] = subtask_hours[i]
+                task_dict['Estimated Time'] = float(subtask_hours[i])
                 new_tasks.append(task_dict)
             
             # Remove the original task
