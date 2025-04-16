@@ -25,25 +25,9 @@ def run_scheduler():
         tasks_df = load_tasks()
         free_time_df = load_free_time()
         
-        # DEBUG: Show tasks and hours
-        with st.expander("Debug Task Data"):
-            st.write("Tasks in the database:")
-            for idx, task in tasks_df.iterrows():
-                est_time = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
-                st.write(f"Task: {task['Task']}, Hours: {est_time}")
-        
-        # Calculate capacity vs demand - with explicit debugging
+        # Calculate capacity vs demand
         total_free_time = get_total_free_time()
-        
-        # Explicitly calculate total estimated time with proper numeric conversion
-        total_estimated_time = 0
-        for idx, task in tasks_df.iterrows():
-            # Convert each value to float and handle nulls
-            est_time = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
-            total_estimated_time += est_time
-        
-        # Convert to float for comparisons
-        total_free_time = float(total_free_time)
+        total_estimated_time = tasks_df['Estimated Time'].sum() if not tasks_df.empty else 0
         
         # Display capacity summary
         display_capacity_summary(total_free_time, total_estimated_time)
@@ -151,10 +135,13 @@ def schedule_tasks(tasks_df, working_free_time_df):
             due_date = task['Due Date']
             
             # Check for large tasks
-            if task_time_remaining > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
-                warnings.append(
-                    f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
-                )
+            if task_time_remaining > 6:
+                if not isinstance(task_name, str):
+                    task_name = str(task_name)
+                if not any(tag in task_name for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+                    warnings.append(
+                        f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
+                    )
             
             # Allocate time across available windows
             for f_idx, window in remaining_free_time_df.iterrows():
@@ -212,10 +199,13 @@ def schedule_tasks(tasks_df, working_free_time_df):
             due_date = task['Due Date']
             
             # Check for large tasks
-            if task_time_remaining > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
-                warnings.append(
-                    f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
-                )
+            if task_time_remaining > 6:
+                if not isinstance(task_name, str):
+                    task_name = str(task_name)
+                if not any(tag in task_name for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+                    warnings.append(
+                        f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
+                    )
             
             # Allocate time across available windows
             for f_idx, window in remaining_free_time_df.iterrows():
@@ -457,7 +447,7 @@ def display_large_tasks():
         large_task_df = pd.DataFrame([
             {
                 "Task": task['Task'],
-                "Hours": float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0,
+                "Hours": task['Estimated Time'],
                 "Due Date": task['Due Date'] if pd.notnull(task['Due Date']) else "None"
             }
             for _, task in large_tasks
