@@ -248,7 +248,7 @@ def schedule_tasks(tasks_df, working_free_time_df):
 
 def display_scheduling_results(scheduled_tasks, daily_summary):
     """
-    Display the results of the scheduling algorithm.
+    Display the results of the scheduling algorithm with editable tables.
     """
     scheduled_df = pd.DataFrame(scheduled_tasks)
     
@@ -274,18 +274,21 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
         
         # Display the daily summary as a data editor
         st.subheader("Daily Capacity Summary (Editable)")
-        st.data_editor(
+        edited_daily_summary = st.data_editor(
             daily_summary,
             use_container_width=True,
-            key="daily_summary_editor"
+            key="daily_summary_editor",
+            num_rows="fixed",
+            disabled=["Date", "Total Scheduled"],  # Only allow editing of Total Available
+            hide_index=True
         )
         
         # Create task-by-date pivot table
-        pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
+        pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna(0)  # Use 0 instead of empty string
         
         # Only display non-empty columns first
         if not pivot_df.empty:
-            non_empty_cols = [col for col in pivot_df.columns if (pivot_df[col] != '').any()]
+            non_empty_cols = [col for col in pivot_df.columns if (pivot_df[col] != 0).any()]
             empty_cols = [col for col in pivot_df.columns if col not in non_empty_cols]
             ordered_cols = non_empty_cols + empty_cols
             
@@ -293,14 +296,20 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
                 pivot_df = pivot_df[ordered_cols]
                 
                 # Convert datetime column labels to string format
-                pivot_df.columns = [col.strftime('%Y-%m-%d') if isinstance(col, pd.Timestamp) else col for col in pivot_df.columns]
+                pivot_df.columns = [col.strftime('%Y-%m-%d') if isinstance(col, pd.Timestamp) else str(col) for col in pivot_df.columns]
+                
+                # Reset index to make Task a regular column
+                pivot_df = pivot_df.reset_index()
                 
                 # Display the pivot table as an editable data editor
                 st.subheader("Task Schedule (Editable)")
-                st.data_editor(
+                edited_pivot = st.data_editor(
                     pivot_df,
                     use_container_width=True,
-                    key="task_schedule_editor"
+                    key="task_schedule_editor",
+                    num_rows="fixed",
+                    disabled=["Task"],  # Only disable the Task column, allow editing of hours
+                    hide_index=True
                 )
                 
                 # Add a note about changes being temporary
