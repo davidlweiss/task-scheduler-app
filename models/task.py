@@ -1,34 +1,23 @@
 import pandas as pd
-import os
 from datetime import datetime
 import math
-
-# File path
-TASKS_FILE = 'tasks.csv'
+from utils.db_utils import table_to_df, df_to_table, execute_query
 
 def load_tasks():
     """
-    Load tasks from CSV file or create a new DataFrame if file doesn't exist.
+    Load tasks from the SQLite database.
     """
-    if os.path.exists(TASKS_FILE):
-        df = pd.read_csv(TASKS_FILE)
-        # Ensure due date is properly formatted
-        if 'Due Date' in df.columns:
-            df['Due Date'] = pd.to_datetime(df['Due Date'], errors='coerce')
-        return df
-    else:
-        return pd.DataFrame(columns=['Project', 'Task', 'Estimated Time', 'Due Date', 'Importance', 'Complexity'])
+    return table_to_df('tasks')
 
 def save_tasks(tasks_df):
     """
-    Save tasks to CSV file.
+    Save tasks to the SQLite database.
     """
-    tasks_df.to_csv(TASKS_FILE, index=False)
-    return True
+    return df_to_table(tasks_df, 'tasks')
 
 def add_task(task_data):
     """
-    Add a new task to the tasks file.
+    Add a new task to the database.
     """
     tasks_df = load_tasks()
     new_task = pd.DataFrame([task_data])
