@@ -102,249 +102,73 @@ def create_daily_summary(free_time_df):
         .rename(columns={'Available Hours': 'Total Available'})
     )
 
-def schedule_tasks(tasks, available_hours, start_date, end_date):
-    """
-    Automatically creates an optimal schedule for tasks given available time.
-    
-    Parameters:
-    - tasks: DataFrame containing task data (name, estimated_time, due_date, importance, complexity, etc.)
-    - available_hours: Total hours available in the scheduling period
-    - start_date: First day of scheduling period
-    - end_date: Last day of scheduling period
-    
-    Returns:
-    - schedule: DataFrame with daily task allocations
-    - unallocated: DataFrame with tasks that couldn't be fully scheduled
-    """
-    # Calculate total task hours
-    total_task_hours = tasks['Estimated Time'].sum()
-    
-    # Create day containers from start_date to end_date
-    days = create_day_containers(start_date, end_date, available_hours)
-    
-    # Sort tasks by urgency and importance
-    prioritized_tasks = prioritize_tasks(tasks)
-    
-    # Initialize tracking variables
-    scheduled_tasks = []
-    unallocated_tasks = []
-    remaining_hours = available_hours
-    
-    # First pass: Schedule tasks with hard deadlines
-    deadline_tasks = prioritized_tasks[prioritized_tasks['Due Date'].notnull()]
-    for _, task in deadline_tasks.iterrows():
-        scheduled_hours = schedule_task(task, days, remaining_hours)
-        remaining_hours -= scheduled_hours
-        
-        if scheduled_hours < task['Estimated Time']:
-            # Track partially scheduled tasks
-            unallocated_tasks.append({
-                'Task': task['Task'],
-                'Unallocated Hours': task['Estimated Time'] - scheduled_hours,
-                'Reason': 'Insufficient time before deadline'
-            })
-    
-    # Second pass: Handle focus session tasks
-    focus_tasks = prioritized_tasks[prioritized_tasks['Focus Sessions'].notnull()]
-    for _, task in focus_tasks.iterrows():
-        if task['Task'] not in [t['Task'] for t in unallocated_tasks]:
-            schedule_focus_sessions(task, days, remaining_hours)
-    
-    # Third pass: Similar task batching
-    task_groups = group_similar_tasks(prioritized_tasks)
-    for group in task_groups:
-        schedule_task_group(group, days, remaining_hours)
-    
-    # Final pass: Remaining tasks by priority
-    for _, task in prioritized_tasks.iterrows():
-        if task['Task'] not in [t['Task'] for t in scheduled_tasks + unallocated_tasks]:
-            scheduled_hours = schedule_task(task, days, remaining_hours)
-            remaining_hours -= scheduled_hours
-            
-            if scheduled_hours < task['Estimated Time']:
-                unallocated_tasks.append({
-                    'Task': task['Task'],
-                    'Unallocated Hours': task['Estimated Time'] - scheduled_hours,
-                    'Reason': 'Insufficient total capacity'
-                })
-    
-    # Generate final schedule representation
-    schedule = create_schedule_representation(days)
-    
-    return schedule, unallocated_tasks
-
-def prioritize_tasks(tasks):
-    """
-    Create a priority score combining deadline urgency and importance.
-    """
-    today = pd.to_datetime(datetime.today().date())
-    
-    def calculate_priority(row):
-        # If task is due today or past due, give highest priority
-        if pd.notnull(row['Due Date']):
-            days_until_due = (row['Due Date'] - today).days
-            if days_until_due <= 0:
-                return -9999  # Highest priority for overdue
-            
-            # Priority formula: balances days until due with importance
-            deadline_factor = 10 / (days_until_due + 1)  # Higher weight for closer deadlines
-            return -(deadline_factor * row['Importance'] * 10)
-        else:
-            # For tasks without deadlines, use importance as base priority
-            return -row['Importance']
-    
-    tasks['Priority'] = tasks.apply(calculate_priority, axis=1)
-    return tasks.sort_values('Priority')
-
-def group_similar_tasks(tasks):
-    """
-    Group tasks that are similar in nature for batching.
-    """
-    groups = []
-    
-    # Example: Group by project
-    project_groups = tasks.groupby('Project')
-    for project, group_tasks in project_groups:
-        groups.append(group_tasks)
-    
-    # Additional grouping: Find tasks with similar names
-    # (e.g., all "Document" tasks)
-    keyword_patterns = ['Document', 'Review', 'Refactor']
-    for pattern in keyword_patterns:
-        matching_tasks = tasks[tasks['Task'].str.contains(pattern)]
-        if not matching_tasks.empty:
-            groups.append(matching_tasks)
-    
-    return groups
-
 def schedule_tasks(tasks_df, working_free_time_df):
     """
     Schedule tasks based on priority and available time.
     """
-    # Calculate available hours from working_free_time_df
-    total_available_hours = working_free_time_df['Available Hours'].sum() if not working_free_time_df.empty else 0
-    
-    # Determine start and end dates
-    if working_free_time_df.empty:
-        start_date = pd.to_datetime(datetime.today().date())
-        end_date = start_date + pd.Timedelta(days=14)  # Default to two weeks
-    else:
-        start_date = working_free_time_df['Date'].min()
-        end_date = working_free_time_df['Date'].max()
-    
-    # Implement missing helper functions
-    def create_day_containers(start_date, end_date, total_hours):
-        """Create containers for each day in the date range."""
-        days = []
-        current_date = start_date
-        
-        # Map dates to available hours from working_free_time_df
-        date_to_hours = {}
-        for _, row in working_free_time_df.iterrows():
-            date_to_hours[pd.to_datetime(row['Date']).date()] = row['Available Hours']
-        
-        while current_date <= end_date:
-            current_date_key = current_date.date()
-            days.append({
-                'date': current_date,
-                'available_hours': date_to_hours.get(current_date_key, 0),
-                'schedule': []
-            })
-            current_date += pd.Timedelta(days=1)
-        
-        return days
-    
-    def calculate_start_time(day):
-        """Calculate start time based on existing schedule."""
-        if not day['schedule']:
-            return 9  # Default start at 9 AM
-        else:
-            return 9 + sum(task['Hours'] for task in day['schedule'])
-    
-    def schedule_task_group(group, days, remaining_hours):
-        """Schedule a group of similar tasks together."""
-        scheduled_hours = 0
-        
-        for _, task in group.iterrows():
-            # Skip tasks already in unallocated_tasks
-            if task['Task'] in [t['Task'] for t in unallocated_tasks]:
-                continue
-                
-            task_hours = schedule_task(task, days, remaining_hours)
-            scheduled_hours += task_hours
-            
-        return scheduled_hours
-    
-    # The rest of your implementation remains similar...
-    # [Implementation continues as in your new code]
-    
-    # Add warnings list to match original return signature
+    scheduled_tasks = []
     warnings = []
-    for task in unallocated_tasks:
-        warnings.append(f"HANDLE: {task['Task']} needs more time than available before due date.")
+    unallocated_tasks = []
+    
+    # Prioritize tasks
+    tasks_df = calculate_task_priority(tasks_df)
+    
+    today = pd.to_datetime(datetime.today().date())
+    
+    # Main scheduling loop
+    for idx, task in tasks_df.iterrows():
+        task_time_remaining = task['Estimated Time']
+        task_name = task['Task']
+        due_date = task['Due Date']
+        
+        # Check for large tasks
+        if task_time_remaining > 6 and not any(tag in str(task_name) for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
+            warnings.append(
+                f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
+            )
+        
+        # Allocate time across available windows
+        for f_idx, window in working_free_time_df.iterrows():
+            if task_time_remaining <= 0:
+                break
+            
+            if pd.notnull(due_date) and window['Date'] > due_date:
+                break
+            
+            available_hours = window['Available Hours']
+            if available_hours > 0:
+                allocated_time = min(task_time_remaining, available_hours)
+                scheduled_tasks.append({
+                    'Task': task_name,
+                    'Date': window['Date'],
+                    'Allocated Hours': allocated_time
+                })
+                working_free_time_df.at[f_idx, 'Available Hours'] -= allocated_time
+                task_time_remaining -= allocated_time
+        
+        # Track unallocated tasks
+        if pd.notnull(due_date) and task_time_remaining > 0:
+            warnings.append(
+                f"HANDLE: {task_name} (Due: {due_date.date()}) "
+                f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
+            )
+            
+            # Track the unallocated task with details
+            unallocated_tasks.append({
+                'Task': task_name,
+                'Task Index': idx,
+                'Due Date': due_date,
+                'Total Hours': task['Estimated Time'],
+                'Allocated Hours': task['Estimated Time'] - task_time_remaining,
+                'Unallocated Hours': task_time_remaining
+            })
     
     return scheduled_tasks, warnings, unallocated_tasks
-def schedule_focus_sessions(task, days, remaining_hours):
-    """
-    Schedule a task with focus sessions, respecting session length.
-    """
-    sessions = int(task['Focus Sessions'])
-    session_length = float(task['Session Length'])
-    
-    # Try to schedule each session as a continuous block
-    for i in range(sessions):
-        for day in days:
-            if day['available_hours'] >= session_length:
-                # Add session to day's schedule
-                day['schedule'].append({
-                    'Task': f"{task['Task']} (Session {i+1})",
-                    'Hours': session_length,
-                    'Start Time': calculate_start_time(day)
-                })
-                
-                # Update tracking
-                day['available_hours'] -= session_length
-                break
-    
-    return sessions * session_length
-
-def create_schedule_representation(days):
-    """
-    Convert the internal days structure to a user-friendly schedule.
-    """
-    schedule = []
-    
-    for day in days:
-        date_str = day['date'].strftime('%A, %B %d')
-        
-        # Group by morning/afternoon
-        morning = []
-        afternoon = []
-        
-        for task in day['schedule']:
-            if task['Start Time'] < 12:
-                morning.append(task)
-            else:
-                afternoon.append(task)
-        
-        # Add to schedule
-        schedule.append({
-            'Date': date_str,
-            'Morning': morning,
-            'Afternoon': afternoon,
-            'Total Hours': sum(task['Hours'] for task in day['schedule'])
-        })
-    
-    return schedule
 
 def display_scheduling_results(scheduled_tasks, daily_summary):
     """
     Display the results of the scheduling algorithm.
     """
-    if not scheduled_tasks:
-        st.info("No tasks could be scheduled with the current free time availability.")
-        return
-        
     scheduled_df = pd.DataFrame(scheduled_tasks)
     
     if not scheduled_df.empty:
@@ -362,13 +186,9 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
         # Ensure both Date columns are datetime
         daily_summary['Date'] = pd.to_datetime(daily_summary['Date'])
         daily_scheduled['Date'] = pd.to_datetime(daily_scheduled['Date'])
+        daily_summary = daily_summary.merge(daily_scheduled, on='Date', how='left').fillna(0)
         
-        # Check if daily_summary is empty
-        if daily_summary.empty:
-            st.dataframe(daily_scheduled)
-        else:
-            daily_summary = daily_summary.merge(daily_scheduled, on='Date', how='left').fillna(0)
-            st.dataframe(daily_summary)
+        st.dataframe(daily_summary)
         
         # Create task-by-date pivot table
         pivot_df = scheduled_df.pivot(index='Task', columns='Date', values='Allocated Hours').fillna('')
@@ -391,9 +211,6 @@ def handle_unallocated_tasks(unallocated_tasks, tasks_df):
     """
     Display and provide resolution options for tasks with insufficient allocated time.
     """
-    if not unallocated_tasks:
-        return
-        
     st.subheader("Tasks with Insufficient Hours")
     
     # Create a dataframe of unallocated tasks
