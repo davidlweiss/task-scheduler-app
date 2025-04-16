@@ -25,13 +25,25 @@ def run_scheduler():
         tasks_df = load_tasks()
         free_time_df = load_free_time()
         
-        # Calculate capacity vs demand
-        total_free_time = get_total_free_time()
-        total_estimated_time = tasks_df['Estimated Time'].sum() if not tasks_df.empty else 0
+        # DEBUG: Show tasks and hours
+        with st.expander("Debug Task Data"):
+            st.write("Tasks in the database:")
+            for idx, task in tasks_df.iterrows():
+                est_time = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
+                st.write(f"Task: {task['Task']}, Hours: {est_time}")
         
-        # Convert to float to ensure proper comparison
+        # Calculate capacity vs demand - with explicit debugging
+        total_free_time = get_total_free_time()
+        
+        # Explicitly calculate total estimated time with proper numeric conversion
+        total_estimated_time = 0
+        for idx, task in tasks_df.iterrows():
+            # Convert each value to float and handle nulls
+            est_time = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
+            total_estimated_time += est_time
+        
+        # Convert to float for comparisons
         total_free_time = float(total_free_time)
-        total_estimated_time = float(total_estimated_time)
         
         # Display capacity summary
         display_capacity_summary(total_free_time, total_estimated_time)
@@ -121,7 +133,8 @@ def schedule_tasks(tasks_df, working_free_time_df):
     
     # Main scheduling loop
     for idx, task in tasks_df.iterrows():
-        task_time_remaining = float(task['Estimated Time'])
+        # Ensure task_time_remaining is a float
+        task_time_remaining = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
         task_name = task['Task']
         due_date = task['Due Date']
         
@@ -139,7 +152,9 @@ def schedule_tasks(tasks_df, working_free_time_df):
             if pd.notnull(due_date) and window['Date'] > due_date:
                 break
             
-            available_hours = float(window['Available Hours'])
+            # Ensure available_hours is a float
+            available_hours = float(window['Available Hours']) if pd.notnull(window['Available Hours']) else 0
+            
             if available_hours > 0:
                 allocated_time = min(task_time_remaining, available_hours)
                 scheduled_tasks.append({
@@ -152,9 +167,13 @@ def schedule_tasks(tasks_df, working_free_time_df):
         
         # Track unallocated tasks
         if pd.notnull(due_date) and task_time_remaining > 0:
+            # Ensure values are floats for warning message
+            total_est = float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0
+            allocated = total_est - task_time_remaining
+            
             warnings.append(
                 f"HANDLE: {task_name} (Due: {due_date.date()}) "
-                f"needs {float(task['Estimated Time'])}h, but only {float(task['Estimated Time']) - task_time_remaining}h scheduled before due date."
+                f"needs {total_est}h, but only {allocated}h scheduled before due date."
             )
             
             # Track the unallocated task with details
@@ -162,8 +181,8 @@ def schedule_tasks(tasks_df, working_free_time_df):
                 'Task': task_name,
                 'Task Index': idx,
                 'Due Date': due_date,
-                'Total Hours': float(task['Estimated Time']),
-                'Allocated Hours': float(task['Estimated Time']) - task_time_remaining,
+                'Total Hours': total_est,
+                'Allocated Hours': allocated,
                 'Unallocated Hours': task_time_remaining
             })
     
@@ -371,7 +390,7 @@ def display_large_tasks():
         large_task_df = pd.DataFrame([
             {
                 "Task": task['Task'],
-                "Hours": task['Estimated Time'],
+                "Hours": float(task['Estimated Time']) if pd.notnull(task['Estimated Time']) else 0,
                 "Due Date": task['Due Date'] if pd.notnull(task['Due Date']) else "None"
             }
             for _, task in large_tasks
