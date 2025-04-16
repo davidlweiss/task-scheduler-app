@@ -7,6 +7,7 @@ from components.wizard import run_wizard
 from components.db_manager import show_db_manager
 from utils.session_state import initialize_session_state
 from utils.db_utils import initialize_database
+from components.task_intake import show_task_intake_wizard
 
 def main():
     """Main entry point for the Task Scheduler application."""
