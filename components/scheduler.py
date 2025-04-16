@@ -275,12 +275,7 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
         st.data_editor(
             daily_summary,
             use_container_width=True,
-            key="daily_summary_editor",
-            column_config={
-                "Date": st.column_config.DateColumn("Date"),
-                "Total Available": st.column_config.NumberColumn("Available Hours"),
-                "Total Scheduled": st.column_config.NumberColumn("Scheduled Hours")
-            }
+            key="daily_summary_editor"
         )
         
         # Create task-by-date pivot table
@@ -299,9 +294,7 @@ def display_scheduling_results(scheduled_tasks, daily_summary):
             st.data_editor(
                 pivot_df,
                 use_container_width=True,
-                key="task_schedule_editor",
-                column_config={col: st.column_config.NumberColumn(col.strftime("%a %b %d") if isinstance(col, pd.Timestamp) else col) 
-                              for col in pivot_df.columns}
+                key="task_schedule_editor"
             )
             
             # Add a note about changes being temporary
