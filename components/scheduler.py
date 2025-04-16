@@ -27,7 +27,7 @@ def run_scheduler():
         
         # Calculate capacity vs demand
         total_free_time = get_total_free_time()
-        total_estimated_time = tasks_df['Estimated Time'].sum() if not tasks_df.empty else 0
+        total_estimated_time = sum(float(x) for x in tasks_df['Estimated Time'] if pd.notnull(x)) if not tasks_df.empty else 0
         
         # Display capacity summary
         display_capacity_summary(total_free_time, total_estimated_time)
