@@ -1,29 +1,19 @@
 import pandas as pd
 import os
 from datetime import datetime
-
-# File path
-BACKLOG_FILE = 'backlog.csv'
+from utils.db_utils import table_to_df, df_to_table, execute_query
 
 def load_backlog():
     """
-    Load backlog data from CSV or create a new DataFrame if file doesn't exist.
+    Load backlog data from SQLite database.
     """
-    if os.path.exists(BACKLOG_FILE):
-        df = pd.read_csv(BACKLOG_FILE)
-        # Ensure dates are properly formatted
-        if 'Creation Date' in df.columns:
-            df['Creation Date'] = pd.to_datetime(df['Creation Date'])
-        return df
-    else:
-        return pd.DataFrame(columns=['Idea', 'Category', 'Description', 'Creation Date', 'Status'])
+    return table_to_df('backlog')
 
 def save_backlog(backlog_df):
     """
-    Save backlog data to CSV file.
+    Save backlog data to SQLite database.
     """
-    backlog_df.to_csv(BACKLOG_FILE, index=False)
-    return True
+    return df_to_table(backlog_df, 'backlog')
 
 def add_backlog_item(idea_data):
     """
