@@ -72,10 +72,15 @@ def display_capacity_summary(total_free_time, total_estimated_time):
     """
     Display summary of total capacity vs demand.
     """
+    # Convert to float to ensure proper comparison
+    total_free_time = float(total_free_time)
+    total_estimated_time = float(total_estimated_time)
+    
     st.markdown(f"### Capacity vs Demand")
     st.markdown(f"Total Free Time: **{total_free_time} hours**")
     st.markdown(f"Total Task Demand: **{total_estimated_time} hours**")
     
+    # Compare as floats
     if total_estimated_time > total_free_time:
         st.warning(
             f"You are over capacity by {total_estimated_time - total_free_time} hours. "
@@ -130,14 +135,12 @@ def schedule_tasks(tasks_df, working_free_time_df):
         
         # Schedule these imminent tasks first
         for idx, task in imminent_deadline_tasks.iterrows():
-            task_time_remaining = task['Estimated Time']
-            task_name = task['Task']
+            task_time_remaining = float(task['Estimated Time'])
+            task_name = str(task['Task'])
             due_date = task['Due Date']
             
             # Check for large tasks
             if task_time_remaining > 6:
-                if not isinstance(task_name, str):
-                    task_name = str(task_name)
                 if not any(tag in task_name for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
                     warnings.append(
                         f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
@@ -151,7 +154,7 @@ def schedule_tasks(tasks_df, working_free_time_df):
                 if pd.notnull(due_date) and window['Date'] > due_date:
                     break
                 
-                available_hours = window['Available Hours']
+                available_hours = float(window['Available Hours'])
                 if available_hours > 0:
                     allocated_time = min(task_time_remaining, available_hours)
                     scheduled_tasks.append({
@@ -165,11 +168,11 @@ def schedule_tasks(tasks_df, working_free_time_df):
             # Track if we've scheduled this task and how much is left
             if task_time_remaining <= 0:
                 scheduled_task_indices.add(idx)
-            elif task_time_remaining < task['Estimated Time']:
+            elif task_time_remaining < float(task['Estimated Time']):
                 # We allocated some but not all hours
                 warnings.append(
                     f"HANDLE: {task_name} (Due: {due_date.date()}) "
-                    f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
+                    f"needs {task['Estimated Time']}h, but only {float(task['Estimated Time']) - task_time_remaining}h scheduled before due date."
                 )
                 
                 # Track the unallocated task with details
@@ -177,8 +180,8 @@ def schedule_tasks(tasks_df, working_free_time_df):
                     'Task': task_name,
                     'Task Index': idx,
                     'Due Date': due_date,
-                    'Total Hours': task['Estimated Time'],
-                    'Allocated Hours': task['Estimated Time'] - task_time_remaining,
+                    'Total Hours': float(task['Estimated Time']),
+                    'Allocated Hours': float(task['Estimated Time']) - task_time_remaining,
                     'Unallocated Hours': task_time_remaining
                 })
                 
@@ -194,14 +197,12 @@ def schedule_tasks(tasks_df, working_free_time_df):
         
         # Main scheduling loop for remaining tasks
         for idx, task in remaining_tasks_df.iterrows():
-            task_time_remaining = task['Estimated Time']
-            task_name = task['Task']
+            task_time_remaining = float(task['Estimated Time'])
+            task_name = str(task['Task'])
             due_date = task['Due Date']
             
             # Check for large tasks
             if task_time_remaining > 6:
-                if not isinstance(task_name, str):
-                    task_name = str(task_name)
                 if not any(tag in task_name for tag in ['[MULTI-SESSION]', '[FIXED EVENT]', '[PENDING PLANNING]']):
                     warnings.append(
                         f"Task '{task_name}' exceeds 6 hours and should probably be split unless it's a Work Block."
@@ -215,7 +216,7 @@ def schedule_tasks(tasks_df, working_free_time_df):
                 if pd.notnull(due_date) and window['Date'] > due_date:
                     break
                 
-                available_hours = window['Available Hours']
+                available_hours = float(window['Available Hours'])
                 if available_hours > 0:
                     allocated_time = min(task_time_remaining, available_hours)
                     scheduled_tasks.append({
@@ -230,7 +231,7 @@ def schedule_tasks(tasks_df, working_free_time_df):
             if pd.notnull(due_date) and task_time_remaining > 0:
                 warnings.append(
                     f"HANDLE: {task_name} (Due: {due_date.date()}) "
-                    f"needs {task['Estimated Time']}h, but only {task['Estimated Time'] - task_time_remaining}h scheduled before due date."
+                    f"needs {task['Estimated Time']}h, but only {float(task['Estimated Time']) - task_time_remaining}h scheduled before due date."
                 )
                 
                 # Track the unallocated task with details
@@ -238,8 +239,8 @@ def schedule_tasks(tasks_df, working_free_time_df):
                     'Task': task_name,
                     'Task Index': idx,
                     'Due Date': due_date,
-                    'Total Hours': task['Estimated Time'],
-                    'Allocated Hours': task['Estimated Time'] - task_time_remaining,
+                    'Total Hours': float(task['Estimated Time']),
+                    'Allocated Hours': float(task['Estimated Time']) - task_time_remaining,
                     'Unallocated Hours': task_time_remaining
                 })
     
