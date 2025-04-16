@@ -23,9 +23,9 @@ def add_free_time(date, hours):
     # Check if date already exists
     if not free_time_df.empty and date in free_time_df['Date'].values:
         idx = free_time_df[free_time_df['Date'] == date].index[0]
-        free_time_df.at[idx, 'Available Hours'] += hours
+        free_time_df.at[idx, 'Available Hours'] += float(hours)
     else:
-        new_row = pd.DataFrame({'Date': [date], 'Available Hours': [hours]})
+        new_row = pd.DataFrame({'Date': [date], 'Available Hours': [float(hours)]})
         free_time_df = pd.concat([free_time_df, new_row], ignore_index=True)
     
     return save_free_time(free_time_df)
@@ -40,8 +40,8 @@ def subtract_free_time(date, hours):
     # Check if date exists
     if not free_time_df.empty and date in free_time_df['Date'].values:
         idx = free_time_df[free_time_df['Date'] == date].index[0]
-        current_hours = free_time_df.at[idx, 'Available Hours']
-        new_hours = max(0, current_hours - hours)  # Prevent negative hours
+        current_hours = float(free_time_df.at[idx, 'Available Hours'])
+        new_hours = max(0, current_hours - float(hours))  # Prevent negative hours
         
         if new_hours == 0:
             # Remove the date if hours reduced to 0
@@ -58,7 +58,17 @@ def get_total_free_time():
     Calculate total available free time across all dates.
     """
     free_time_df = load_free_time()
-    return free_time_df['Available Hours'].sum() if not free_time_df.empty else 0
+    
+    if free_time_df.empty:
+        return 0
+    
+    # Ensure we're summing numeric values
+    free_time_df['Available Hours'] = pd.to_numeric(free_time_df['Available Hours'], errors='coerce').fillna(0)
+    
+    # Sum the values
+    total = free_time_df['Available Hours'].sum()
+    
+    return float(total)
 
 def delete_free_time(idx):
     """
